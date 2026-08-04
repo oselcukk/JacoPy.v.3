@@ -37,7 +37,7 @@ Terminal'de (Windows'ta "PowerShell"):
 
 ```bash
 git clone https://github.com/oselcukk/JacoPy.v.3.git
-cd JacoPy.v.3.
+cd JacoPy.v.3
 ```
 
 > `git` yoksa: [git-scm.com/downloads](https://git-scm.com/downloads)
