@@ -1,0 +1,37 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+.claude/
+
+# Local-only presentation materials (Pazartesi ders sunumu)
+presentation/
+
+# Heavy metric demo output / intermediate cache (Kerr-Newman-de Sitter
+# style runs); regenerated locally, not useful in git history.
+examples/kerr_cache/
+examples/kerr_output.txt
+examples/*_cache/
+examples/*_output.txt
+
+# Course material, papers and dev-only planning — never published
+*.pdf
+ROADMAP.md

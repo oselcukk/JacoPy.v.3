@@ -1,0 +1,138 @@
+"""TM special case of the central code (PDF item 9).
+
+Lie bracket + its properties (2.A), the engine layer for the Phase 1
+deferrals (2.B), the exterior derivative ``d`` and Lie derivative
+``L`` derived from the Lie bracket (2.C-D), anholonomy ``γ^a_bc``
+(2.E), Schouten-Nijenhuis (2.F), Cartan relations and the calculus
+property suite (2.D/2.G).
+"""
+
+from jacopy.central.tangent.lie_bracket import (
+    LieBracketActionDefinition,
+    ScalarActAsMultiplicationDefinition,
+    lie_bracket,
+    prove_antisymmetry,
+    prove_jacobi,
+    prove_leibniz_second_slot,
+    prove_first_slot_function_linearity,
+    prove_additivity_second_slot,
+    prove_scalar_homogeneity,
+)
+from jacopy.central.tangent.definitions import (
+    CovariantScalarActionDefinition,
+    FrameDualityDefinition,
+    is_scalar_function,
+    prove_covariant_scalar_action,
+    prove_covariant_leibniz,
+    prove_frame_duality,
+)
+from jacopy.central.tangent.engine import tangent_engine
+from jacopy.central.tangent.anholonomy import (
+    AnholonomyCoefficient,
+    FrameBracketCoefficientDefinition,
+    HolonomicFrameDefinition,
+    anholonomy_coefficient,
+    prove_gamma_antisymmetry,
+    prove_coframe_differential,
+    prove_frame_jacobi,
+    prove_holonomic_gamma_vanishes,
+)
+from jacopy.central.tangent.schouten import (
+    SN,
+    SchoutenBracket,
+    SNExpansionDefinition,
+    multivector_degree,
+    sn_bracket,
+    prove_reduces_to_lie,
+    prove_sn_vector_function,
+    prove_sn_wedge_leibniz,
+    prove_sn_graded_antisymmetry,
+)
+from jacopy.central.tangent.lie_bracket import BracketOrientationDefinition
+from jacopy.central.tangent.cartan import (
+    L,
+    lie_derivative,
+    prove_with_bracket_identities,
+    prove_d_squared_zero_on_one_forms,
+    prove_cartan_magic_on_functions,
+    prove_cartan_magic_on_one_forms,
+    prove_L_commutes_with_d_on_functions,
+    prove_L_iota_commutator,
+    prove_L_L_commutator_on_functions,
+    prove_L_L_commutator_on_one_forms,
+    prove_iota_anticommute,
+    prove_L_commutes_with_d_on_one_forms,
+    prove_L_d_iota_commutation,
+    prove_L_d_iota_exact,
+    register_cartan_theorems,
+)
+from jacopy.central.tangent.exterior import (
+    CARTAN_TM,
+    cartan_calculus,
+    d,
+    exterior_d,
+    prove_df_on_vector,
+    prove_one_form_intrinsic,
+    prove_d_squared_zero_on_functions,
+    register_d_squared_zero,
+)
+
+__all__ = [
+    "LieBracketActionDefinition",
+    "ScalarActAsMultiplicationDefinition",
+    "CovariantScalarActionDefinition",
+    "FrameDualityDefinition",
+    "is_scalar_function",
+    "lie_bracket",
+    "tangent_engine",
+    "prove_antisymmetry",
+    "prove_jacobi",
+    "prove_leibniz_second_slot",
+    "prove_first_slot_function_linearity",
+    "prove_additivity_second_slot",
+    "prove_scalar_homogeneity",
+    "AnholonomyCoefficient",
+    "FrameBracketCoefficientDefinition",
+    "HolonomicFrameDefinition",
+    "anholonomy_coefficient",
+    "prove_gamma_antisymmetry",
+    "prove_coframe_differential",
+    "prove_frame_jacobi",
+    "prove_holonomic_gamma_vanishes",
+    "SN",
+    "SchoutenBracket",
+    "SNExpansionDefinition",
+    "BracketOrientationDefinition",
+    "multivector_degree",
+    "sn_bracket",
+    "prove_reduces_to_lie",
+    "prove_sn_vector_function",
+    "prove_sn_wedge_leibniz",
+    "prove_sn_graded_antisymmetry",
+    "CARTAN_TM",
+    "L",
+    "lie_derivative",
+    "prove_with_bracket_identities",
+    "prove_d_squared_zero_on_one_forms",
+    "prove_cartan_magic_on_functions",
+    "prove_cartan_magic_on_one_forms",
+    "prove_L_commutes_with_d_on_functions",
+    "prove_L_iota_commutator",
+    "prove_L_L_commutator_on_functions",
+    "prove_L_L_commutator_on_one_forms",
+    "prove_iota_anticommute",
+    "prove_L_commutes_with_d_on_one_forms",
+    "prove_L_d_iota_commutation",
+    "prove_L_d_iota_exact",
+    "register_cartan_theorems",
+    "cartan_calculus",
+    "d",
+    "exterior_d",
+    "prove_df_on_vector",
+    "prove_one_form_intrinsic",
+    "prove_d_squared_zero_on_functions",
+    "register_d_squared_zero",
+    "prove_covariant_scalar_action",
+    "prove_covariant_leibniz",
+    "prove_frame_duality",
+]
