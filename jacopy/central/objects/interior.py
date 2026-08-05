@@ -58,6 +58,17 @@ class Interior(Derivation):
     def vector(self) -> Expr:
         return self._vector
 
+    # Slot protocol (Phase 6.E): the vector is a rewritable slot, so
+    # engine rules can normalize INSIDE it (e.g. a sharp whose form
+    # slot carries a scalar factor: ι_{Π(f·η)} → ι_{f·Πη} → f·ι_{Πη}
+    # via the sharp linearity + the interior vector linearity).
+    @property
+    def rewritable_slots(self):
+        return (self._vector,)
+
+    def with_slots(self, X: Expr) -> "Interior":
+        return Interior(X)
+
     def _key(self) -> Any:
         return (self._name, self._degree, self._vector)
 

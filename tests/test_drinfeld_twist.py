@@ -94,3 +94,78 @@ class TestBTwist:
             B, U, om, V, et, slots, registry=reg
         )
         assert chain.steps
+
+
+@pytest.mark.parametrize("p", [1, 2])
+class TestRTwistLinearity:
+    """(7.26): R′ is C∞-linear in the second entry; the first entry
+    carries the ``−Π(df ∧ g_Z)`` anomaly (TM case: L_A = 0,
+    σ_d(f,·) = df ∧ ·)."""
+
+    def test_second_entry_linear(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_r_twist_second_entry_linear,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (f,) = functions("ft", registry=reg)
+        chain = prove_r_twist_second_entry_linear(
+            N, om, et, f, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_first_entry_obstruction(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_r_twist_first_entry_obstruction,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (f,) = functions("ft", registry=reg)
+        chain = prove_r_twist_first_entry_obstruction(
+            N, om, et, f, h, registry=reg
+        )
+        assert chain.steps
+
+
+@pytest.mark.parametrize("p", [1, 2])
+class TestHTwistedInitialBracket:
+    """Twists applied to the H-TWISTED Dorfman bracket."""
+
+    def test_severa_full(self, p):
+        """Ψ_B on H-Dorfman = (H+dB)-Dorfman [eq (7.19)-(7.20)]."""
+        from jacopy.packages.drinfeld.twist import (
+            prove_b_twist_severa_h,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (H,) = forms("Ht", degree=p + 2)
+        chain = prove_b_twist_severa_h(
+            H, B, U, om, V, et, slots, registry=reg
+        )
+        assert chain.steps
+
+    def test_pi_twist_h_form_shift(self, p):
+        """form = Nambu form + H(U+Πω, V+Πη)."""
+        from jacopy.packages.drinfeld.twist import (
+            prove_pi_twist_h_form,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (H,) = forms("Ht", degree=p + 2)
+        chain = prove_pi_twist_h_form(
+            N, H, U, om, V, et, slots, registry=reg
+        )
+        assert chain.steps
+
+    def test_pi_twist_h_vec_shift(self, p):
+        """vec = Nambu vec + R′ − Π(H(U+Πω, V+Πη))."""
+        from jacopy.packages.drinfeld.twist import (
+            prove_pi_twist_h_vec,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (H,) = forms("Ht", degree=p + 2)
+        chain = prove_pi_twist_h_vec(
+            N, H, U, om, V, et, h, registry=reg
+        )
+        assert chain.steps

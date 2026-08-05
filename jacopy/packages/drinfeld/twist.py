@@ -230,6 +230,8 @@ def _twist_engine(N, registry):
     eng.register(OperatorSlotAdditivityDefinition())
     eng.register(MagicFormulaDefinition(registry))
     eng.register(PairingArgSplitDefinition())
+    eng.register(FormProductToWedgeDefinition(registry))
+    eng.register(WedgeSumScalarDefinition(registry))
     return eng
 
 
@@ -503,3 +505,394 @@ def prove_b_twist_severa(
         engine=eng,
         max_steps=max_steps,
     )
+
+
+# ------------------------------------------------------------------- #
+# R′-linearity obstruction (7.26)                                      #
+# ------------------------------------------------------------------- #
+
+
+def prove_r_twist_second_entry_linear(
+    N,
+    omega: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """``R′(ω, f·η) = f·R′(ω, η)`` — the R-twist IS C∞-linear in its
+    SECOND entry [eq (7.26) context]. Acting on the probe ``h``;
+    declaration-free."""
+    from jacopy.core.expr import Product
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    node = Act(
+        Sum(
+            r_twist(N, omega, Product(f, eta)),
+            Neg(Product(f, r_twist(N, omega, eta))),
+        ),
+        h,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_twist_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_r_twist_first_entry_obstruction(
+    N,
+    omega: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """The FIRST-entry C∞-linearity obstruction of the R-twist
+    [eq (7.26), TM Lie algebroid case ``L_A = 0``,
+    ``σ_d(f, x) = df ∧ x``]:
+
+        R′(f·ω, η) = f·R′(ω, η) − Π( df ∧ (ι_{Πω}η + ι_{Πη}ω) ).
+
+    The anomaly is ``−Π(df ∧ g_Z(ω,η))`` — nonzero in general, so a
+    C∞-linear R′ forces ``Π`` to have nontrivial kernel content.
+    Acting on ``h``; declaration-free."""
+    from jacopy.core.expr import Product
+    from jacopy.core.wedge import Wedge
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    g_z = Sum(
+        _iota(N.sharp_vf(omega), eta),
+        _iota(N.sharp_vf(eta), omega),
+    )
+    anomaly = Neg(N.sharp_vf(Wedge(d(f), g_z)))
+    node = Act(
+        Sum(
+            r_twist(N, Product(f, omega), eta),
+            Neg(Product(f, r_twist(N, omega, eta))),
+            Neg(anomaly),
+        ),
+        h,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_twist_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+# ------------------------------------------------------------------- #
+# H-twisted initial bracket                                            #
+# ------------------------------------------------------------------- #
+
+
+def h_term(H: Expr, U: Expr, V: Expr) -> Expr:
+    """``H(U, V) := ι_V ι_U H`` — the ``Λᵖ``-valued H-twist term of a
+    ``(p+2)``-form ``H``."""
+    return Act(Interior(V), Act(Interior(U), H))
+
+
+def dorfman_double_h(
+    H: Expr, U: Expr, omega: Expr, V: Expr, eta: Expr
+) -> Tuple[Expr, Expr]:
+    """The H-TWISTED standard Dorfman bracket on ``TM ⊕ Λᵖ``:
+    the form component gains ``ι_V ι_U H``."""
+    vec, form = dorfman_double(U, omega, V, eta)
+    return vec, Sum(form, h_term(H, U, V))
+
+
+def twisted_dorfman_h(
+    H: Expr,
+    apply_twist,
+    invert_twist,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+) -> Tuple[Expr, Expr]:
+    """``Ψ⁻¹ [Ψe₁, Ψe₂]_{H-Dorfman}`` [eq (7.3) with an H-twisted
+    initial bracket]."""
+    u1, o1 = apply_twist(U, omega)
+    v1, e1 = apply_twist(V, eta)
+    return invert_twist(*dorfman_double_h(H, u1, o1, v1, e1))
+
+
+def prove_b_twist_severa_h(
+    H: Expr,
+    B: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """The FULL Ševera statement [eq (7.19)-(7.20)]: Ψ_B applied to
+    the H-TWISTED Dorfman bracket gives the ``(H + dB)``-twisted
+    Dorfman bracket,
+
+        form([e₁,e₂]_{Ψ_B, H}) = form([e₁,e₂]_{H+dB}),
+
+    evaluated on the given slots. Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        HeadFormProductLiftDefinition,
+        InteriorVectorLinearityDefinition,
+        MultiEvalArgLinearityDefinition,
+        OperatorSlotAdditivityDefinition,
+    )
+    from jacopy.central.tangent.engine import tangent_engine
+    from jacopy.central.tangent.lie_bracket import (
+        LieBracketLeibnizDefinition,
+    )
+
+    _, tw_form = twisted_dorfman_h(
+        H,
+        lambda v, f: b_twist(B, v, f),
+        lambda v, f: b_twist_inverse(B, v, f),
+        U, omega, V, eta,
+    )
+    _, target_form = dorfman_double_h(
+        Sum(H, d(B)), U, omega, V, eta
+    )
+    node = _ev(Sum(tw_form, Neg(target_form)), slots)
+    eng = tangent_engine(registry=registry)
+    eng.register(LieBracketLeibnizDefinition(registry))
+    eng.register(MultiEvalArgLinearityDefinition(registry))
+    eng.register(InteriorVectorLinearityDefinition(registry))
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(HeadFormProductLiftDefinition(registry))
+    eng.register(OperatorSlotAdditivityDefinition())
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=eng,
+        max_steps=max_steps,
+    )
+
+
+def prove_pi_twist_h_form(
+    N,
+    H: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Ψ_Π on the H-twisted Dorfman bracket, form component
+    [eq (7.24)-(7.25) with H]: the twist shifts the Nambu double's
+    form part by the H-term of the TWISTED anchors,
+
+        form([e₁,e₂]_{Ψ_Π, H}) = form_Nambu + H(U + Πω, V + Πη).
+
+    Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    _, tw_form = twisted_dorfman_h(
+        H,
+        lambda v, f: pi_twist(N, v, f),
+        lambda v, f: pi_twist_inverse(N, v, f),
+        U, omega, V, eta,
+    )
+    _, nb_form = nambu_double(N, U, omega, V, eta)
+    shift = h_term(
+        H,
+        Sum(U, N.sharp_vf(omega)),
+        Sum(V, N.sharp_vf(eta)),
+    )
+    node = _ev(Sum(tw_form, Neg(nb_form), Neg(shift)), slots)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_twist_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_pi_twist_h_vec(
+    N,
+    H: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Ψ_Π on the H-twisted Dorfman bracket, vector component: the
+    form-side H-shift feeds back through ``Ψ⁻¹`` as ``−Π(H-term)``,
+
+        vec([e₁,e₂]_{Ψ_Π, H}) = vec_Nambu + R′(ω,η)
+                                − Π( H(U + Πω, V + Πη) ).
+
+    Acting on ``h``; declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    tw_vec, _ = twisted_dorfman_h(
+        H,
+        lambda v, f: pi_twist(N, v, f),
+        lambda v, f: pi_twist_inverse(N, v, f),
+        U, omega, V, eta,
+    )
+    nb_vec, _ = nambu_double(N, U, omega, V, eta)
+    shift = Neg(
+        N.sharp_vf(
+            h_term(
+                H,
+                Sum(U, N.sharp_vf(omega)),
+                Sum(V, N.sharp_vf(eta)),
+            )
+        )
+    )
+    node = Act(
+        Sum(
+            tw_vec,
+            Neg(nb_vec),
+            Neg(r_twist(N, omega, eta)),
+            Neg(shift),
+        ),
+        h,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_twist_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+class FormProductToWedgeDefinition(Definition):
+    """``α · β → α ∧ β`` for a bare :class:`Product` with at least
+    two determinable form-degree (≥ 1) factors — scoped to the twist
+    engine (the head-position case is central
+    :class:`HeadFormProductLiftDefinition`; here the shapes sit
+    INSIDE sharp slots, where Leibniz splits leave ``d(f)·x``
+    products). Scalar (degree-0) factors stay in front."""
+
+    name = "form product is a wedge: α · β = α ∧ β (slot-reachable)"
+
+    def __init__(
+        self, registry: Optional[PropertyRegistry] = None
+    ) -> None:
+        from jacopy.core.expr import Product
+
+        self._registry = registry
+        self.anchor = Product
+
+    def _split(self, expr: Expr):
+        from jacopy.algebra.derivation import degree_of
+        from jacopy.core.expr import Product
+
+        if not (
+            isinstance(expr, Product) and len(expr.children) >= 2
+        ):
+            return None
+        scalars, formfs = [], []
+        for c in expr.children:
+            if hasattr(c, "wedge_degree"):
+                return None
+            try:
+                k = degree_of(c, self._registry).as_int()
+            except ValueError:
+                return None
+            if k is None:
+                return None
+            (scalars if k == 0 else formfs).append(c)
+        if len(formfs) < 2:
+            return None
+        return scalars, formfs
+
+    def matches(self, expr: Expr) -> bool:
+        return self._split(expr) is not None
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.expr import Product
+        from jacopy.core.wedge import Wedge
+
+        scalars, formfs = self._split(expr)
+        wedge = Wedge(*formfs)
+        if not scalars:
+            return wedge
+        return Product(*scalars, wedge)
+
+
+class WedgeSumScalarDefinition(Definition):
+    """Wedge slot normalization, scoped to the twist engine: a
+    ``Sum`` factor distributes (``α ∧ (x + y) = α∧x + α∧y``) and a
+    degree-0 factor pulls out as a scalar coefficient (``α ∧ f =
+    f·α`` — the wedge with a 0-form IS scalar multiplication). The
+    algorithm passes do this in visible trees; inside sharp slots
+    only Definitions fire."""
+
+    name = "wedge normalization: Sum distributes, 0-forms pull out"
+
+    def __init__(
+        self, registry: Optional[PropertyRegistry] = None
+    ) -> None:
+        from jacopy.core.wedge import Wedge
+
+        self._registry = registry
+        self.anchor = Wedge
+
+    def _site(self, expr: Expr):
+        from jacopy.algebra.derivation import degree_of
+
+        for i, c in enumerate(expr.children):
+            if isinstance(c, Sum):
+                return i, "sum"
+            if hasattr(c, "wedge_degree"):
+                continue
+            try:
+                k = degree_of(c, self._registry).as_int()
+            except ValueError:
+                continue
+            if k == 0:
+                return i, "scalar"
+        return None
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.wedge import Wedge
+
+        return (
+            isinstance(expr, Wedge)
+            and len(expr.children) >= 2
+            and self._site(expr) is not None
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.expr import Product
+        from jacopy.core.wedge import Wedge
+
+        i, kind = self._site(expr)
+        kids = list(expr.children)
+        if kind == "sum":
+            return Sum(
+                *(
+                    Wedge(*(kids[:i] + [t] + kids[i + 1 :]))
+                    for t in kids[i].children
+                )
+            )
+        scalar = kids[i]
+        rest = kids[:i] + kids[i + 1 :]
+        core = rest[0] if len(rest) == 1 else Wedge(*rest)
+        return Product(scalar, core)
