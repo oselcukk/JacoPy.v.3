@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional, Tuple
 
 from jacopy.algebra.derivation import Act, Derivation, degree_of
-from jacopy.core.expr import Expr, Neg, Product, Sum
+from jacopy.core.expr import Expr, Integer, Neg, Product, Sum
 from jacopy.core.multi_eval import MultiEval
 from jacopy.core.pairing import Pairing
 from jacopy.core.registry import PropertyRegistry
@@ -80,7 +80,7 @@ class LieDerivative(Derivation):
     proved from this definition, never a definition itself.
     """
 
-    __slots__ = ("_calculus_name", "_vector")
+    __slots__ = ("_calculus_name", "_vector", "_op_name")
 
     def __init__(
         self,
@@ -98,6 +98,7 @@ class LieDerivative(Derivation):
         super().__init__(display, degree=0)
         self._calculus_name = calculus_name
         self._vector = X
+        self._op_name = op_name
 
     @property
     def calculus_name(self) -> str:
@@ -106,6 +107,23 @@ class LieDerivative(Derivation):
     @property
     def vector(self) -> Expr:
         return self._vector
+
+    # Slot protocol (Phase 6.E): the direction is a rewritable slot,
+    # and it is ADDITIVE — L_{X+Y} = L_X + L_Y (ℝ-linearity of the
+    # bracket/anchor in the direction). NOT C∞-linear: L_{fX} ≠ f·L_X
+    # (the df ∧ ι_X anomaly), so only additivity is declared.
+    @property
+    def rewritable_slots(self):
+        return (self._vector,)
+
+    def with_slots(self, X: Expr) -> "LieDerivative":
+        return LieDerivative(
+            self._calculus_name, X, op_name=self._op_name
+        )
+
+    @property
+    def additive_slots(self):
+        return (0,)
 
     def _key(self) -> Any:
         return (self._name, self._degree, self._calculus_name, self._vector)
@@ -861,3 +879,52 @@ class HeadFormProductLiftDefinition(Definition):
             alternating=expr.alternating,
             slot_kind=expr.slot_kind,
         )
+
+
+class OperatorSlotAdditivityDefinition(Definition):
+    """ℝ-additivity of an operator atom in its declared additive
+    slots (Phase 6.E): an operator exposing ``additive_slots``
+    (indices into ``rewritable_slots``) splits when such a slot holds
+    a ``Sum``/``Neg``/zero —
+
+        L_{X+Y} → L_X + L_Y,   L_{−X} → −L_X,   L_0 → 0.
+
+    Anchored at :class:`~jacopy.algebra.derivation.Derivation` (MRO
+    dispatch reaches every operator subclass); fires only on ops that
+    opt in via the protocol. Deliberately NOT C∞-linearity — scalar
+    factors stay (``L_{fX} ≠ f·L_X``); operators that ARE tensorial
+    in a slot keep their own rules (Interior, sharps). The resulting
+    operator-level ``Sum``/``Neg``/zero heads are consumed by the Act
+    layer (:class:`ActOverSumOpDefinition` / the product rule)."""
+
+    name = "operator slot additivity: op_{a+b} = op_a + op_b in declared slots"
+    anchor = Derivation
+
+    def _split_site(self, expr: Expr):
+        idxs = getattr(expr, "additive_slots", None)
+        slots = getattr(expr, "rewritable_slots", None)
+        if not idxs or slots is None:
+            return None
+        slots = tuple(slots)
+        for i in idxs:
+            s = slots[i]
+            if isinstance(s, (Sum, Neg)) or s == Integer(0):
+                return i, slots
+        return None
+
+    def matches(self, expr: Expr) -> bool:
+        return self._split_site(expr) is not None
+
+    def rewrite(self, expr: Expr) -> Expr:
+        i, slots = self._split_site(expr)
+        s = slots[i]
+
+        def rebuilt(sub: Expr) -> Expr:
+            new = slots[:i] + (sub,) + slots[i + 1 :]
+            return expr.with_slots(*new)
+
+        if s == Integer(0):
+            return Integer(0)
+        if isinstance(s, Neg):
+            return Neg(rebuilt(s.arg))
+        return Sum(*(rebuilt(c) for c in s.children))
