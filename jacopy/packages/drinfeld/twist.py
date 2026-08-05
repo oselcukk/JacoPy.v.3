@@ -896,3 +896,228 @@ class WedgeSumScalarDefinition(Definition):
         rest = kids[:i] + kids[i + 1 :]
         core = rest[0] if len(rest) == 1 else Wedge(*rest)
         return Product(scalar, core)
+
+
+# ------------------------------------------------------------------- #
+# Ψ_m — frame-change twist (6.E.3)                                     #
+# ------------------------------------------------------------------- #
+
+
+def m_twist(name: str, vec: Expr, form: Expr) -> Tuple[Expr, Expr]:
+    """``Ψ_m (vec ⊕ form) = m(vec) ⊕ m̃(form)`` [eq (7.11)] — the
+    frame-change twist by an invertible endomorphism pair."""
+    from jacopy.central.objects.endomorphism import EndoForm, EndoVF
+
+    return EndoVF(name, vec), EndoForm(name, form)
+
+
+def m_twist_inverse(
+    name: str, vec: Expr, form: Expr
+) -> Tuple[Expr, Expr]:
+    """``Ψ_m⁻¹ (vec ⊕ form) = m⁻¹(vec) ⊕ m̃⁻¹(form)`` [eq (7.12)]."""
+    from jacopy.central.objects.endomorphism import EndoForm, EndoVF
+
+    return (
+        EndoVF(name, vec, inverted=True),
+        EndoForm(name, form, inverted=True),
+    )
+
+
+def _m_twist_engine(registry):
+    """Tangent engine + the endomorphism laws + the slot-reachable
+    normalization family. Magic converts every ``ℒ`` into ``ι``/``d``
+    (both tensorial/Leibniz-manageable), which is what lets the
+    conjugation proofs run at the RAW expression level — the twisted
+    heads are inert ``m̃⁻¹(…)`` atoms that no evaluation can open."""
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        InteriorVectorLinearityDefinition,
+        MultiEvalArgLinearityDefinition,
+        OperatorSlotAdditivityDefinition,
+    )
+    from jacopy.central.objects.endomorphism import (
+        EndoInverseDefinition,
+        EndoLinearityDefinition,
+    )
+    from jacopy.central.tangent.engine import tangent_engine
+    from jacopy.central.tangent.lie_bracket import (
+        LieBracketLeibnizDefinition,
+    )
+
+    eng = tangent_engine(registry=registry)
+    eng.register(EndoLinearityDefinition(registry))
+    eng.register(EndoInverseDefinition())
+    eng.register(LieBracketLeibnizDefinition(registry))
+    eng.register(MultiEvalArgLinearityDefinition(registry))
+    eng.register(InteriorVectorLinearityDefinition(registry))
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(OperatorSlotAdditivityDefinition())
+    eng.register(MagicFormulaDefinition(registry))
+    eng.register(FormProductToWedgeDefinition(registry))
+    eng.register(WedgeSumScalarDefinition(registry))
+    return eng
+
+
+def twisted_dorfman_m(
+    name: str, U: Expr, omega: Expr, V: Expr, eta: Expr
+) -> Tuple[Expr, Expr]:
+    """``Ψ_m⁻¹ [Ψ_m e₁, Ψ_m e₂]_Dorfman`` — by (7.14)/(7.16) the
+    conjugated bracket ``m⁻¹[mU, mV] ⊕ m̃⁻¹(Dorfman form on the
+    twisted entries)``."""
+    return twisted_dorfman(
+        lambda v, f: m_twist(name, v, f),
+        lambda v, f: m_twist_inverse(name, v, f),
+        U, omega, V, eta,
+    )
+
+
+def prove_m_is_bracket_morphism(
+    name: str,
+    U: Expr,
+    V: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """``m([U,V]′_A) = [mU, mV]_Lie`` [the (7.14) morphism
+    statement]: applying ``m`` to the conjugated A-bracket recovers
+    the Lie bracket of the images — the inverse law in action.
+    Acting on the probe ``h``."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.objects.endomorphism import EndoVF
+    from jacopy.central.objects.form import forms
+    from jacopy.central.tangent.lie_bracket import lie_bracket
+
+    (om,) = forms("_mω", degree=1)
+    tw_vec, _ = twisted_dorfman_m(name, U, om, V, om)
+    node = Act(
+        Sum(
+            EndoVF(name, tw_vec),
+            Neg(
+                lie_bracket(EndoVF(name, U), EndoVF(name, V))
+            ),
+        ),
+        h,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_m_twist_engine(registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_m_twist_right_leibniz_vec(
+    name: str,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Vector component of ``[e₁, f·e₂]_Ψ = f[e₁,e₂]_Ψ +
+    (ρ′(e₁)f)·e₂`` with the TWISTED anchor ``ρ′(U+ω) = m(U)``
+    [eq (7.13)]: the conjugated bracket is again a Leibniz-algebroid
+    bracket. Acting on ``h``; declaration-free."""
+    from jacopy.core.expr import Product
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.objects.endomorphism import EndoVF
+
+    lhs_vec, _ = twisted_dorfman_m(
+        name, U, omega, Product(f, V), Product(f, eta)
+    )
+    base_vec, _ = twisted_dorfman_m(name, U, omega, V, eta)
+    rhs_vec = Sum(
+        Product(f, base_vec),
+        Product(Act(EndoVF(name, U), f), V),
+    )
+    node = Act(Sum(lhs_vec, Neg(rhs_vec)), h)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_m_twist_engine(registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_m_twist_right_leibniz_form(
+    name: str,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    f: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Form component of the same right-Leibniz rule, proved at the
+    RAW expression level (the twisted head is an inert ``m̃⁻¹``
+    atom): both sides normalize to one form under the endomorphism
+    laws + magic. Declaration-free."""
+    from jacopy.core.expr import Product
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.objects.endomorphism import EndoVF
+
+    _, lhs_form = twisted_dorfman_m(
+        name, U, omega, Product(f, V), Product(f, eta)
+    )
+    _, base_form = twisted_dorfman_m(name, U, omega, V, eta)
+    rhs_form = Sum(
+        Product(f, base_form),
+        Product(Act(EndoVF(name, U), f), eta),
+    )
+    node = Sum(lhs_form, Neg(rhs_form))
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_m_twist_engine(registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_m_twist_symmetric_part_form(
+    name: str,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """``form([e₁,e₂]_Ψ + [e₂,e₁]_Ψ) = m̃⁻¹ d( ι_{mU} m̃η +
+    ι_{mV} m̃ω )`` — the conjugated symmetric part is the conjugated
+    exact term ``𝒟′⟨Ψe₁, Ψe₂⟩₊``. Raw expression level;
+    declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.objects.endomorphism import EndoForm, EndoVF
+
+    _, f12 = twisted_dorfman_m(name, U, omega, V, eta)
+    _, f21 = twisted_dorfman_m(name, V, eta, U, omega)
+    target = EndoForm(
+        name,
+        d(
+            Sum(
+                _iota(EndoVF(name, U), EndoForm(name, eta)),
+                _iota(EndoVF(name, V), EndoForm(name, omega)),
+            )
+        ),
+        inverted=True,
+    )
+    node = Sum(f12, f21, Neg(target))
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_m_twist_engine(registry),
+        max_steps=max_steps,
+    )

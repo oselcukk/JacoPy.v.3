@@ -169,3 +169,129 @@ class TestHTwistedInitialBracket:
             N, H, U, om, V, et, h, registry=reg
         )
         assert chain.steps
+
+
+@pytest.mark.parametrize("p", [1, 2])
+class TestMTwist:
+    """Ψ_m = [[m,0],[0,m̃]] frame-change twist [eq (7.13)-(7.16)]:
+    conjugation by an OPAQUE invertible endomorphism pair (EndoVF /
+    EndoForm primitives + linearity/inverse laws). No new bracket
+    terms are generated — the mechanical content is that the
+    conjugated bracket is again a Leibniz-algebroid bracket with the
+    twisted anchor ρ′(U+ω) = m(U)."""
+
+    def test_m_is_bracket_morphism(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_m_is_bracket_morphism,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        chain = prove_m_is_bracket_morphism(
+            "m", U, V, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_right_leibniz_vec_with_twisted_anchor(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_m_twist_right_leibniz_vec,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (f,) = functions("fm", registry=reg)
+        chain = prove_m_twist_right_leibniz_vec(
+            "m", U, om, V, et, f, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_right_leibniz_form_raw_level(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_m_twist_right_leibniz_form,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (f,) = functions("fm", registry=reg)
+        chain = prove_m_twist_right_leibniz_form(
+            "m", U, om, V, et, f, registry=reg
+        )
+        assert chain.steps
+
+    def test_symmetric_part_conjugated_exact(self, p):
+        from jacopy.packages.drinfeld.twist import (
+            prove_m_twist_symmetric_part_form,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        chain = prove_m_twist_symmetric_part_form(
+            "m", U, om, V, et, registry=reg
+        )
+        assert chain.steps
+
+    def test_components_are_conjugation_formulas(self, p):
+        """(7.14)/(7.16) structural: the twisted components ARE the
+        conjugation formulas verbatim."""
+        from jacopy.central.objects.endomorphism import (
+            EndoForm,
+            EndoVF,
+        )
+        from jacopy.central.tangent.lie_bracket import lie_bracket
+        from jacopy.packages.drinfeld.double import dorfman_double
+        from jacopy.packages.drinfeld.twist import twisted_dorfman_m
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        vec, form = twisted_dorfman_m("m", U, om, V, et)
+        mU, mV = EndoVF("m", U), EndoVF("m", V)
+        assert vec == EndoVF(
+            "m", lie_bracket(mU, mV), inverted=True
+        )
+        base_vec, base_form = dorfman_double(
+            mU, EndoForm("m", om), mV, EndoForm("m", et)
+        )
+        assert form == EndoForm("m", base_form, inverted=True)
+
+
+class TestEndomorphismLaws:
+    """Unit tests for the 6.E.3 primitive."""
+
+    def test_inverse_law_both_ways(self):
+        from jacopy.central.objects.endomorphism import (
+            EndoForm,
+            EndoInverseDefinition,
+            EndoVF,
+        )
+
+        (U,) = vector_fields("U")
+        (om,) = forms("ωe", degree=2)
+        rule = EndoInverseDefinition()
+        n1 = EndoVF("m", EndoVF("m", U, inverted=True))
+        n2 = EndoForm("m", EndoForm("m", om), inverted=True)
+        assert rule.matches(n1) and rule.rewrite(n1) == U
+        assert rule.matches(n2) and rule.rewrite(n2) == om
+
+    def test_different_names_do_not_cancel(self):
+        from jacopy.central.objects.endomorphism import (
+            EndoInverseDefinition,
+            EndoVF,
+        )
+
+        (U,) = vector_fields("U")
+        n = EndoVF("m", EndoVF("k", U, inverted=True))
+        assert not EndoInverseDefinition().matches(n)
+
+    def test_linearity_scalar_and_sum(self):
+        from jacopy.core.expr import Product, Sum
+        from jacopy.central.objects.endomorphism import (
+            EndoLinearityDefinition,
+            EndoVF,
+        )
+
+        reg = PropertyRegistry()
+        (f,) = functions("fe", registry=reg)
+        U, V = vector_fields("U V")
+        rule = EndoLinearityDefinition(reg)
+        n = EndoVF("m", Product(f, U))
+        assert rule.matches(n)
+        assert rule.rewrite(n) == Product(f, EndoVF("m", U))
+        n2 = EndoVF("m", Sum(U, V))
+        assert rule.rewrite(n2) == Sum(
+            EndoVF("m", U), EndoVF("m", V)
+        )
