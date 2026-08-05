@@ -3,6 +3,14 @@
 Primary sources: arXiv:2312.06584 (untwisted bialgebroids) and
 arXiv:2409.11973 (twists, general Roytenberg bracket)."""
 
+from jacopy.packages.drinfeld.double import (
+    canonical_pairing,
+    dorfman_double,
+    poisson_double,
+    prove_dorfman_jacobi_form,
+    prove_dorfman_right_leibniz_form,
+    prove_dorfman_symmetric_part,
+)
 from jacopy.packages.drinfeld.poisson_bialgebroid import (
     kappa_cartan,
     kappa_tilde,
@@ -21,6 +29,12 @@ from jacopy.packages.drinfeld.calculus_conditions import (
 )
 
 __all__ = [
+    "canonical_pairing",
+    "dorfman_double",
+    "poisson_double",
+    "prove_dorfman_jacobi_form",
+    "prove_dorfman_right_leibniz_form",
+    "prove_dorfman_symmetric_part",
     "kappa_cartan",
     "kappa_tilde",
     "lie_tilde_vf",

@@ -102,6 +102,8 @@ def prove_with_bracket_identities(
     *,
     registry: Optional[PropertyRegistry] = None,
     max_repairs: int = 3,
+    engine=None,
+    max_steps: int = 1024,
 ) -> Tuple[ProofChain, List[Theorem]]:
     """Prove ``lhs == rhs``, repairing pairing-slot bracket residuals.
 
@@ -121,7 +123,7 @@ def prove_with_bracket_identities(
     :class:`ProofFailure` when the residual is not of that shape or
     the repair budget is exhausted.
     """
-    engine = _engine(registry)
+    engine = engine if engine is not None else _engine(registry)
     book = TheoremBook()
     used: List[Theorem] = []
 
@@ -141,7 +143,11 @@ def prove_with_bracket_identities(
     for attempt in range(max_repairs + 1):
         try:
             chain = ExpandAndSimplify().prove(
-                lhs, rhs, registry=registry, engine=engine
+                lhs,
+                rhs,
+                registry=registry,
+                engine=engine,
+                max_steps=max_steps,
             )
             return chain, used
         except ProofFailure as exc:

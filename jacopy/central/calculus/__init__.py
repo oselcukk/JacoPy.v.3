@@ -24,6 +24,7 @@ from jacopy.central.calculus.symmetrize_rules import SymAltEvalDefinition
 from jacopy.central.calculus.interior_rules import (
     InteriorActDefinition,
     InteriorEvalDefinition,
+    InteriorVectorLinearityDefinition,
 )
 from jacopy.central.calculus.scalars import is_scalar_function
 
@@ -42,5 +43,6 @@ __all__ = [
     "SymAltEvalDefinition",
     "InteriorActDefinition",
     "InteriorEvalDefinition",
+    "InteriorVectorLinearityDefinition",
     "is_scalar_function",
 ]

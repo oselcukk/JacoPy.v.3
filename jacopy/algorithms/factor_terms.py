@@ -119,12 +119,33 @@ def collect_pairings(expr: Expr) -> Expr:
     keyinfo: Dict[Tuple, Expr] = {}
     order: List[Tuple] = []
     passthrough: List[Expr] = []
+    from jacopy.core.expr import Product as _Product
+
     for term in rebuilt.children:
         sign = 0
         core = term
         while isinstance(core, Neg):
             sign ^= 1
             core = core.arg
+        # Scalar COEFFICIENTS fold into the varying slot
+        # (``s·⟨α,V⟩`` contributes ``s·V`` — the full bilinearity
+        # the docstring promises; 2026-08-04, the Dorfman
+        # right-Leibniz residual needed the coefficient case).
+        coeffs: tuple = ()
+        if isinstance(core, _Product) and len(core.children) >= 2:
+            evals = [
+                c
+                for c in core.children
+                if isinstance(c, (Pairing, MultiEval))
+            ]
+            rest = [
+                c
+                for c in core.children
+                if not isinstance(c, (Pairing, MultiEval))
+            ]
+            if len(evals) == 1:
+                coeffs = tuple(rest)
+                core = evals[0]
         if isinstance(core, Pairing):
             key = ("pairing", core.alpha)
             varying = core.X
@@ -140,6 +161,8 @@ def collect_pairings(expr: Expr) -> Expr:
         else:
             passthrough.append(term)
             continue
+        if coeffs:
+            varying = _Product(*coeffs, varying)
         if key not in groups:
             groups[key] = []
             keyinfo[key] = core

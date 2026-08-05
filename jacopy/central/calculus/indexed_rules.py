@@ -210,56 +210,85 @@ class WedgeEvalDefinition(Definition):
     def __init__(self, registry: Optional[PropertyRegistry] = None) -> None:
         self._registry = registry
 
-    def _is_one_form(self, factor: Expr) -> bool:
+    def _factor_degree(self, factor: Expr):
         from jacopy.algebra.derivation import degree_of
 
         deg = getattr(factor, "degree", None)
-        if isinstance(deg, Degree) and deg == Degree.const(1):
-            return True
+        if isinstance(deg, Degree):
+            k = deg.as_int()
+            if k is not None and k >= 1:
+                return k
         try:
-            return degree_of(factor, self._registry) == Degree.const(1)
+            k = degree_of(factor, self._registry).as_int()
         except ValueError:
-            return False
+            return None
+        return k if (k is not None and k >= 1) else None
 
     def matches(self, expr: Expr) -> bool:
         if not isinstance(expr, MultiEval):
             return False
         head = expr.head
-        return (
-            isinstance(head, Wedge)
-            and len(head.children) >= 2
-            and expr.arity == len(head.children)
-            and all(self._is_one_form(c) for c in head.children)
-        )
+        if not (
+            isinstance(head, Wedge) and len(head.children) >= 2
+        ):
+            return False
+        degs = [self._factor_degree(c) for c in head.children]
+        if any(k is None for k in degs):
+            return False
+        return expr.arity == sum(degs)
 
     def rewrite(self, expr: Expr) -> Expr:
-        from itertools import permutations
+        # General SHUFFLE expansion (mixed degrees — Phase 6 probe
+        # for the Vinogradov cross-term ``β ∧ dα``):
+        #   (α∧β∧…)(v₁..v_n) = Σ_shuffles sgn · α(v_S₁) β(v_S₂) …
+        # For all-1-form factors this reduces to the determinant.
+        from itertools import combinations
 
-        factors = expr.head.children
-        args = expr.args
-        n = len(factors)
+        factors = list(expr.head.children)
+        degs = [self._factor_degree(c) for c in factors]
+        args = list(expr.args)
+
+        def eval_factor(factor: Expr, slots) -> Expr:
+            if len(slots) == 1:
+                return Pairing(factor, slots[0])
+            return MultiEval(
+                factor,
+                *slots,
+                alternating=True,
+                slot_kind=expr.slot_kind,
+            )
+
+        def shuffles(indices, ds):
+            # Yields (sign, [slot-groups]) over all (d₁,…,d_m)
+            # shuffles of ``indices`` (ascending inside each group).
+            if len(ds) == 1:
+                yield 0, [list(indices)]
+                return
+            k = ds[0]
+            idx = list(indices)
+            for chosen in combinations(range(len(idx)), k):
+                group = [idx[i] for i in chosen]
+                rest = [
+                    idx[i]
+                    for i in range(len(idx))
+                    if i not in chosen
+                ]
+                # Parity of moving the chosen block to the front.
+                inv = sum(c - j for j, c in enumerate(chosen)) & 1
+                for sub_sign, sub_groups in shuffles(rest, ds[1:]):
+                    yield inv ^ sub_sign, [group] + sub_groups
+
         terms = []
-        for perm in permutations(range(n)):
-            # Permütasyon paritesi (çift/tek transpozisyon sayısı).
-            parity = 0
-            seen = [False] * n
-            for start in range(n):
-                if seen[start]:
-                    continue
-                length = 0
-                j = start
-                while not seen[j]:
-                    seen[j] = True
-                    j = perm[j]
-                    length += 1
-                parity ^= (length - 1) & 1
+        for sign, groups in shuffles(range(len(args)), degs):
             term: Expr = Product(
                 *(
-                    Pairing(factors[i], args[perm[i]])
-                    for i in range(n)
+                    eval_factor(
+                        factors[i], [args[j] for j in groups[i]]
+                    )
+                    for i in range(len(factors))
                 )
             )
-            terms.append(Neg(term) if parity else term)
+            terms.append(Neg(term) if sign else term)
         return Sum(*terms)
 
 

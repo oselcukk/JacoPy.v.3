@@ -155,3 +155,69 @@ class TestContraction:
         (U,) = vector_fields("U")
         with pytest.raises(TypeError):
             contract(U, "not expr")
+
+
+class TestInteriorVectorLinearity:
+    """Phase 6.D rule: ι is tensorial in its VECTOR slot at the Act
+    level — ι_{f·X+Y} = f·ι_X + ι_Y (the Poisson double's
+    ι_{f·V}(dω) shapes sit unevaluated inside π-slots)."""
+
+    def _rule(self, reg):
+        from jacopy.central.calculus import (
+            InteriorVectorLinearityDefinition,
+        )
+
+        return InteriorVectorLinearityDefinition(reg)
+
+    def test_scalar_pulls_out(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Product
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.objects import functions
+        from jacopy.central.objects.interior import Interior
+
+        reg = PropertyRegistry()
+        (f,) = functions("f", registry=reg)
+        (U,) = vector_fields("U")
+        (sigma,) = forms("σ", degree=2)
+        rule = self._rule(reg)
+        node = Act(Interior(Product(f, U)), sigma)
+        assert rule.matches(node)
+        assert rule.rewrite(node) == Product(
+            f, Act(Interior(U), sigma)
+        )
+
+    def test_sum_and_neg_split(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Neg, Sum
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.objects.interior import Interior
+
+        reg = PropertyRegistry()
+        U, V = vector_fields("U V")
+        (sigma,) = forms("σ", degree=2)
+        rule = self._rule(reg)
+        node = Act(Interior(Sum(U, Neg(V))), sigma)
+        assert rule.matches(node)
+        out = rule.rewrite(node)
+        assert out == Sum(
+            Act(Interior(U), sigma),
+            Act(Interior(Neg(V)), sigma),
+        )
+        neg_node = Act(Interior(Neg(V)), sigma)
+        assert rule.matches(neg_node)
+        assert rule.rewrite(neg_node) == Neg(
+            Act(Interior(V), sigma)
+        )
+
+    def test_plain_vector_does_not_match(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.objects.interior import Interior
+
+        reg = PropertyRegistry()
+        (U,) = vector_fields("U")
+        (sigma,) = forms("σ", degree=2)
+        assert not self._rule(reg).matches(
+            Act(Interior(U), sigma)
+        )

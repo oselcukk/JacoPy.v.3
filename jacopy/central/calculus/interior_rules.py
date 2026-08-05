@@ -104,3 +104,75 @@ class InteriorEvalDefinition(Definition):
         omega = expr.head.arg
         X = expr.head.op.vector
         return _evaluate(omega, (X,) + expr.args)
+
+
+class InteriorVectorLinearityDefinition(Definition):
+    """``ι_{f·X + Y} → f·ι_X + ι_Y`` at the ``Act`` level — the
+    interior product is tensorial in its vector slot (Phase 6.D: the
+    Poisson double's ``ι_{fV}(dω)`` shapes sit unevaluated inside
+    π-slots and need the operator-level split)."""
+
+    anchor = Act
+
+    def __init__(self, registry=None) -> None:
+        self._registry = registry
+        self.name = (
+            "interior vector linearity: ι_{fX+Y} = f·ι_X + ι_Y"
+        )
+
+    def _split(self, vec):
+        from jacopy.core.expr import Integer, Neg, Product, Sum
+        from jacopy.central.calculus.scalars import (
+            is_scalar_function,
+        )
+
+        if isinstance(vec, (Sum, Neg)) or vec == Integer(0):
+            return True
+        if isinstance(vec, Product) and len(vec.children) >= 2:
+            return any(
+                is_scalar_function(c, self._registry)
+                for c in vec.children
+            )
+        return False
+
+    def matches(self, expr) -> bool:
+        from jacopy.central.objects.interior import Interior
+
+        return (
+            isinstance(expr, Act)
+            and isinstance(expr.op, Interior)
+            and self._split(expr.op.vector)
+        )
+
+    def rewrite(self, expr):
+        from jacopy.core.expr import Integer, Neg, Product, Sum
+        from jacopy.central.calculus.scalars import (
+            is_scalar_function,
+        )
+        from jacopy.central.objects.interior import Interior
+
+        vec = expr.op.vector
+        arg = expr.arg
+        if vec == Integer(0):
+            return Integer(0)
+        if isinstance(vec, Sum):
+            return Sum(
+                *(
+                    Act(Interior(c), arg)
+                    for c in vec.children
+                )
+            )
+        if isinstance(vec, Neg):
+            return Neg(Act(Interior(vec.arg), arg))
+        scalars = [
+            c
+            for c in vec.children
+            if is_scalar_function(c, self._registry)
+        ]
+        rest = [
+            c
+            for c in vec.children
+            if not is_scalar_function(c, self._registry)
+        ]
+        core = rest[0] if len(rest) == 1 else Product(*rest)
+        return Product(*scalars, Act(Interior(core), arg))
