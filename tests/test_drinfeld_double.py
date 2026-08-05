@@ -183,3 +183,82 @@ class TestPoissonDoubleTheorems:
         assert poisson_double_anchor_action(P, U, om, f) == Sum(
             Act(U, f), Act(SharpVF(P.pi, om), f)
         )
+
+
+class TestNambuDoubleTheorems:
+    """Phase 6.D-devam: the Nambu double on TM ⊕ Λᵖ T*M [App D] —
+    anchor ρ(U+ω) = U + Πω (D.4), the (D.1)-(D.3) linearity-anomaly
+    cancellation inside right-Leibniz, and the symmetric part with
+    the g_Z contribution (the Z-side bracket is Leibniz for p ≥ 2).
+    All declaration-free (any (p+1)-vector). p = 2 in-suite; p = 3
+    verified offline (27/92/45/126 steps)."""
+
+    def _setup(self, p):
+        from jacopy.packages.poisson.nambu import nambu_structure
+
+        reg = PropertyRegistry()
+        f, h = functions("f h", registry=reg)
+        U, V = vector_fields("U V")
+        om, et = forms("ωn ηn", degree=p)
+        slots = list(
+            vector_fields(" ".join(f"Yn{i}" for i in range(1, p + 1)))
+        )
+        return reg, f, h, U, V, om, et, slots, nambu_structure(p=p)
+
+    def test_p2_symmetric_part_vec(self):
+        from jacopy.packages.drinfeld.double import (
+            prove_nambu_double_symmetric_part_vec,
+        )
+
+        reg, f, h, U, V, om, et, slots, N = self._setup(2)
+        chain = prove_nambu_double_symmetric_part_vec(
+            N, U, om, V, et, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_p2_symmetric_part_form(self):
+        from jacopy.packages.drinfeld.double import (
+            prove_nambu_double_symmetric_part_form,
+        )
+
+        reg, f, h, U, V, om, et, slots, N = self._setup(2)
+        chain = prove_nambu_double_symmetric_part_form(
+            N, U, om, V, et, slots, registry=reg
+        )
+        assert chain.steps
+
+    def test_p2_right_leibniz_vec(self):
+        from jacopy.packages.drinfeld.double import (
+            prove_nambu_double_right_leibniz_vec,
+        )
+
+        reg, f, h, U, V, om, et, slots, N = self._setup(2)
+        chain = prove_nambu_double_right_leibniz_vec(
+            N, U, om, V, et, f, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_p2_right_leibniz_form(self):
+        from jacopy.packages.drinfeld.double import (
+            prove_nambu_double_right_leibniz_form,
+        )
+
+        reg, f, h, U, V, om, et, slots, N = self._setup(2)
+        chain = prove_nambu_double_right_leibniz_form(
+            N, U, om, V, et, f, slots, registry=reg
+        )
+        assert chain.steps
+
+    def test_p1_gz_vanishes_by_alternation(self):
+        """p = 1 consistency: the SAME symmetric-part statement with
+        the g_Z term closes — g_Z(ω,η) = ι_{Πω}η + ι_{Πη}ω dies by
+        alternation of Π, recovering the Poisson double's d⟨,⟩₊."""
+        from jacopy.packages.drinfeld.double import (
+            prove_nambu_double_symmetric_part_form,
+        )
+
+        reg, f, h, U, V, om, et, slots, N = self._setup(1)
+        chain = prove_nambu_double_symmetric_part_form(
+            N, U, om, V, et, slots, registry=reg
+        )
+        assert chain.steps

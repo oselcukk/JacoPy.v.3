@@ -412,3 +412,213 @@ def prove_poisson_double_right_leibniz_vec(
         engine=_poisson_double_engine(P, registry),
         max_steps=max_steps,
     )
+
+
+def lie_tilde_nambu(N, omega: Expr, W: Expr) -> Expr:
+    """``ℒ̃_ω W = [Πω, W]_Lie + Π(ι_W dω)`` — the Nambu tilde Lie
+    derivative on vector fields [drinfeld eq (6.6); the p ≥ 2
+    generalization of :func:`lie_tilde_vf`]."""
+    return Sum(
+        lie_bracket(N.sharp_vf(omega), W),
+        N.sharp_vf(Act(Interior(W), d(omega))),
+    )
+
+
+def nambu_double(
+    N, U: Expr, omega: Expr, V: Expr, eta: Expr
+) -> Tuple[Expr, Expr]:
+    """The NAMBU double ``[U+ω, V+η]`` on ``TM ⊕ Λᵖ T*M`` [eq (4.17)
+    with the Π-induced tilde calculus (6.6)-(6.7)]:
+
+        vector: [U,V] + ℒ̃_ω V − ℒ̃_η U + d̃ι̃_η U,
+        form:   [ω,η]_Kos + ℒ_U η − ℒ_V ω + dι_V ω,
+
+    with ``ι̃_η U = ι_U η``, ``d̃ = −Πd`` and the higher Koszul
+    bracket as the Z-side bracket. At p = 1 this is
+    :func:`poisson_double` with ``Π`` the Poisson bivector."""
+    from jacopy.packages.poisson.nambu import nambu_koszul_bracket
+
+    dtilde_iota = Neg(N.sharp_vf(d(_iota(U, eta))))
+    vec = Sum(
+        lie_bracket(U, V),
+        lie_tilde_nambu(N, omega, V),
+        Neg(lie_tilde_nambu(N, eta, U)),
+        dtilde_iota,
+    )
+    form = Sum(
+        nambu_koszul_bracket(N, omega, eta),
+        _L(U, eta),
+        Neg(_L(V, omega)),
+        d(_iota(V, omega)),
+    )
+    return vec, form
+
+
+def _nambu_double_engine(N, registry):
+    """The 6.D Nambu-double layer: the Nambu engine plus the interior
+    vector-slot linearity, the slot-reachable product rule and the
+    head wedge lift (the latter two taught by the p = 2 residuals).
+    Declaration-free: no fundamental-identity assumption — the
+    theorems below hold for ANY (p+1)-vector."""
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        HeadFormProductLiftDefinition,
+        InteriorVectorLinearityDefinition,
+    )
+    from jacopy.packages.poisson.nambu import nambu_engine
+
+    eng = nambu_engine(N, registry=registry)
+    eng.register(InteriorVectorLinearityDefinition(registry))
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(HeadFormProductLiftDefinition(registry))
+    return eng
+
+
+def nambu_double_anchor_action(N, U: Expr, omega: Expr, f: Expr) -> Expr:
+    """``ρ(U+ω)(f) = U(f) + (Πω)(f)`` — the anchor of the Nambu
+    double is the sum of the two anchors [eq (D.4): Π as a map from
+    p-forms to TM is the Z-side anchor]."""
+    return Sum(Act(U, f), Act(N.sharp_vf(omega), f))
+
+
+def prove_nambu_double_symmetric_part_vec(
+    N,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Vector component of ``[e₁,e₂] + [e₂,e₁] = 𝒟⟨e₁,e₂⟩₊`` for the
+    Nambu double: ``d̃⟨e₁,e₂⟩₊ = −Πd(ι_Uη + ι_Vω)``. Tested by
+    acting on the probe function ``h``. Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    v12, _ = nambu_double(N, U, omega, V, eta)
+    v21, _ = nambu_double(N, V, eta, U, omega)
+    pairing = Sum(_iota(U, eta), _iota(V, omega))
+    node = Act(Sum(v12, v21, N.sharp_vf(d(pairing))), h)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_nambu_double_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_nambu_double_symmetric_part_form(
+    N,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Form component of the same identity. For p ≥ 2 the Z-side
+    (higher Koszul) bracket is Leibniz, not Lie — its symmetric part
+    contributes ``d g_Z(ω,η)`` with ``g_Z(ω,η) = ι_{Πω}η + ι_{Πη}ω``
+    [eq (6.17)]:
+
+        form([e₁,e₂] + [e₂,e₁]) = d(ι_Uη + ι_Vω) + d g_Z(ω,η).
+
+    At p = 1 the ``g_Z`` term vanishes by alternation (the Poisson
+    double's form part is plain ``d⟨,⟩₊``). Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    _, f12 = nambu_double(N, U, omega, V, eta)
+    _, f21 = nambu_double(N, V, eta, U, omega)
+    pairing = Sum(_iota(U, eta), _iota(V, omega))
+    g_z = Sum(
+        _iota(N.sharp_vf(omega), eta),
+        _iota(N.sharp_vf(eta), omega),
+    )
+    node = _ev(
+        Sum(f12, f21, Neg(d(pairing)), Neg(d(g_z))), slots
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_nambu_double_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_nambu_double_right_leibniz_vec(
+    N,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Vector component of ``[e₁, f·e₂] = f[e₁,e₂] + (ρ(e₁)f)·e₂``
+    with ``ρ(U+ω) = U + Πω``, acting on the probe function ``h``.
+    The mechanical content of (D.1)-(D.4): the ``Π(df ∧ ι_Uη)``
+    anomalies of ``ℒ̃_{fη}`` and ``d̃ι̃_{fη}`` cancel (D.3), and
+    ``ℒ̃_ω(fV)`` produces the ``(Πω)(f)·V`` anchor term (D.4).
+    Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    lhs_vec, _ = nambu_double(
+        N, U, omega, Product(f, V), Product(f, eta)
+    )
+    base_vec, _ = nambu_double(N, U, omega, V, eta)
+    rhs_vec = Sum(
+        Product(f, base_vec),
+        Product(nambu_double_anchor_action(N, U, omega, f), V),
+    )
+    node = Act(Sum(lhs_vec, Neg(rhs_vec)), h)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_nambu_double_engine(N, registry),
+        max_steps=max_steps,
+    )
+
+
+def prove_nambu_double_right_leibniz_form(
+    N,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    f: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Form component of the same right-Leibniz rule, evaluated on
+    the given vector slots (p slots for a p-form section).
+    Declaration-free."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    _, lhs_form = nambu_double(
+        N, U, omega, Product(f, V), Product(f, eta)
+    )
+    _, base_form = nambu_double(N, U, omega, V, eta)
+    rhs_form = Sum(
+        Product(f, base_form),
+        Product(nambu_double_anchor_action(N, U, omega, f), eta),
+    )
+    node = _ev(Sum(lhs_form, Neg(rhs_form)), slots)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_nambu_double_engine(N, registry),
+        max_steps=max_steps,
+    )

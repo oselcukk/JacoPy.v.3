@@ -221,3 +221,109 @@ class TestInteriorVectorLinearity:
         assert not self._rule(reg).matches(
             Act(Interior(U), sigma)
         )
+
+
+class TestActExpansionDefinition:
+    """Phase 6.D slot-reachable product rule: one Act node's graded
+    Leibniz / linearity as an engine rewrite (fires inside operator
+    slots the algorithm passes cannot reach)."""
+
+    def test_d_over_sum(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Sum
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.calculus import ActExpansionDefinition
+        from jacopy.central.tangent.exterior import d
+
+        reg = PropertyRegistry()
+        om, et = forms("ω η", degree=1)
+        rule = ActExpansionDefinition(reg)
+        node = d(Sum(om, et))
+        assert rule.matches(node)
+        out = rule.rewrite(node)
+        assert out == Sum(d(om), d(et))
+
+    def test_interior_scalar_product(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Product
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.objects import functions
+        from jacopy.central.calculus import ActExpansionDefinition
+        from jacopy.central.objects.interior import Interior
+
+        reg = PropertyRegistry()
+        (f,) = functions("f", registry=reg)
+        (U,) = vector_fields("U")
+        (sigma,) = forms("σ", degree=2)
+        from jacopy.core.expr import Sum
+
+        rule = ActExpansionDefinition(reg)
+        node = Act(Interior(U), Product(f, sigma))
+        assert rule.matches(node)
+        # Leibniz split: ι_U(f)·σ + f·ι_U(σ) — the ι_U(f) leg dies
+        # downstream (interior of a 0-form; InteriorActDefinition).
+        assert rule.rewrite(node) == Sum(
+            Product(Act(Interior(U), f), sigma),
+            Product(f, Act(Interior(U), sigma)),
+        )
+
+    def test_inert_act_does_not_match(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.calculus import ActExpansionDefinition
+        from jacopy.central.objects.interior import Interior
+
+        reg = PropertyRegistry()
+        (U,) = vector_fields("U")
+        (sigma,) = forms("σ", degree=2)
+        assert not ActExpansionDefinition(reg).matches(
+            Act(Interior(U), sigma)
+        )
+
+
+class TestHeadFormProductLift:
+    """Phase 6.D: a bare Product of forms in a MultiEval head lifts
+    to their Wedge (the canonical graded product), so the wedge
+    evaluation can proceed."""
+
+    def test_two_one_forms_lift(self):
+        from jacopy.core.expr import Product
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.core.wedge import Wedge
+        from jacopy.central.calculus import (
+            HeadFormProductLiftDefinition,
+        )
+
+        reg = PropertyRegistry()
+        om, et = forms("ω η", degree=1)
+        Y1, Y2 = vector_fields("Y1 Y2")
+        rule = HeadFormProductLiftDefinition(reg)
+        node = MultiEval(
+            Product(om, et), Y1, Y2,
+            alternating=True, slot_kind="vector",
+        )
+        assert rule.matches(node)
+        assert rule.rewrite(node) == MultiEval(
+            Wedge(om, et), Y1, Y2,
+            alternating=True, slot_kind="vector",
+        )
+
+    def test_scalar_prefix_left_to_head_scalar(self):
+        from jacopy.core.expr import Product
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.core.registry import PropertyRegistry
+        from jacopy.central.objects import functions
+        from jacopy.central.calculus import (
+            HeadFormProductLiftDefinition,
+        )
+
+        reg = PropertyRegistry()
+        (f,) = functions("f", registry=reg)
+        (sigma,) = forms("σ", degree=2)
+        Y1, Y2 = vector_fields("Y1 Y2")
+        node = MultiEval(
+            Product(f, sigma), Y1, Y2,
+            alternating=True, slot_kind="vector",
+        )
+        assert not HeadFormProductLiftDefinition(reg).matches(node)

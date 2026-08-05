@@ -767,3 +767,97 @@ class PairingVectorScalarDefinition(Definition):
 
         scalars, core = self._split(expr)
         return Product(*scalars, Pairing(expr.alpha, core))
+
+
+class ActExpansionDefinition(Definition):
+    """Slot-reachable graded Leibniz / linearity of a single ``Act``
+    node — delegates to the product-rule algorithm's ``_expand_act``
+    (single source of truth; Phase 6.D).
+
+    The engine's slot protocol fires Definitions INSIDE operator
+    atoms (a Nambu sharp's form slot, a bracket's sections), but the
+    algorithm passes (``product_rule``, ``simplify``) only walk
+    ``children`` — so shapes like ``Π(d(ι_U(f·η)))`` stalled with the
+    Leibniz expansion out of reach. This rule makes the same
+    expansion available as an engine rewrite. Definitional: it IS
+    the product rule (ℝ-linearity + graded Leibniz), step-tagged as
+    one axiom application."""
+
+    name = "graded Leibniz / Act linearity (slot-reachable product rule)"
+    anchor = Act
+
+    def __init__(
+        self, registry: Optional[PropertyRegistry] = None
+    ) -> None:
+        self._registry = registry
+
+    def _expanded(self, expr: Expr) -> Expr:
+        from jacopy.algorithms.product_rule import _expand_act
+
+        return _expand_act(expr.op, expr.arg, self._registry)
+
+    def matches(self, expr: Expr) -> bool:
+        return isinstance(expr, Act) and self._expanded(expr) != expr
+
+    def rewrite(self, expr: Expr) -> Expr:
+        return self._expanded(expr)
+
+
+class HeadFormProductLiftDefinition(Definition):
+    """``(α · β)(Y…) → (α ∧ β)(Y…)`` — a bare :class:`Product` of
+    form-degree factors in an evaluation head IS their wedge (v3's
+    canonical graded product of forms is :class:`Wedge`; raw products
+    of forms only arise transiently from Leibniz splits like
+    ``d(f·x) = d(f)·x + f·d(x)`` once the scalar prefix is gone).
+
+    Guarded: every factor must have determinable degree ≥ 1 and the
+    degrees must sum to the evaluation arity — scalar prefixes are
+    left to :class:`HeadScalarDefinition` (which strips them first).
+    Phase 6.D: the slot-reachable product rule surfaced these shapes
+    ahead of the Palais evaluation."""
+
+    name = "head lift: a product of forms in an evaluation head is their wedge"
+    anchor = MultiEval
+
+    def __init__(
+        self, registry: Optional[PropertyRegistry] = None
+    ) -> None:
+        self._registry = registry
+
+    def _form_factors(self, expr: "MultiEval"):
+        from jacopy.core.expr import Product as _Product
+
+        head = expr.head
+        if not (
+            isinstance(head, _Product) and len(head.children) >= 2
+        ):
+            return None
+        total = 0
+        for c in head.children:
+            try:
+                k = degree_of(c, self._registry).as_int()
+            except ValueError:
+                return None
+            if k is None or k < 1:
+                return None
+            total += k
+        if total != expr.arity:
+            return None
+        return head.children
+
+    def matches(self, expr: Expr) -> bool:
+        return (
+            isinstance(expr, MultiEval)
+            and self._form_factors(expr) is not None
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.wedge import Wedge as _Wedge
+
+        factors = self._form_factors(expr)
+        return MultiEval(
+            _Wedge(*factors),
+            *expr.args,
+            alternating=expr.alternating,
+            slot_kind=expr.slot_kind,
+        )

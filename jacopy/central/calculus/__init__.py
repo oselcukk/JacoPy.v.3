@@ -8,6 +8,8 @@ algebroid = ``(ρ_E, [·,·]_E)`` (Phase 3), Poisson = ``(π^♯, Koszul)``
 """
 
 from jacopy.central.calculus.bracket_calculus import (
+    ActExpansionDefinition,
+    HeadFormProductLiftDefinition,
     BracketCalculus,
     ExteriorDerivative,
     IntrinsicDDefinition,
@@ -29,6 +31,8 @@ from jacopy.central.calculus.interior_rules import (
 from jacopy.central.calculus.scalars import is_scalar_function
 
 __all__ = [
+    "ActExpansionDefinition",
+    "HeadFormProductLiftDefinition",
     "BracketCalculus",
     "ExteriorDerivative",
     "IntrinsicDDefinition",
