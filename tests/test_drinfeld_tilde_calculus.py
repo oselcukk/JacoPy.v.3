@@ -104,3 +104,26 @@ class TestTildeBuildingBlocks:
         assert out == N.sharp_vf(
             tc.nambu_koszul_bracket(N, om, et)
         )
+
+
+@pytest.mark.parametrize("p", [1, 2])
+class TestJacobiCompatibilityHeavy:
+    """(D.8)/(D.10): the 'heavy' pair — closes declaration-free at
+    the RAW expression level with the 6.E rule set (operator-level
+    magic + lie-iota + interior anticommutation). The p = 1 Poisson
+    counterparts (6.B, eqs 4.36/4.38) needed bridge-instance craft;
+    the tilde instantiation does not."""
+
+    def test_d8(self, p):
+        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(p)
+        chain = tc.prove_jacobi_compat_d8(
+            N, U, et, mu, registry=reg
+        )
+        assert chain.steps
+
+    def test_d10(self, p):
+        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(p)
+        chain = tc.prove_jacobi_compat_d10(
+            N, om, et, W, registry=reg
+        )
+        assert chain.steps

@@ -619,3 +619,115 @@ def prove_jacobi_compat_d11(
         engine=_tilde_engine(N, registry, declare_fi=False),
         max_steps=max_steps,
     )
+
+
+def g_z_pairing(N, a: Expr, b: Expr) -> Expr:
+    """``g_Z(a, b) := ι_{Πa} b + ι_{Πb} a`` — the symmetric Z-metric
+    [eq (6.17)]."""
+    return Sum(
+        Act(Interior(N.sharp_vf(a)), b),
+        Act(Interior(N.sharp_vf(b)), a),
+    )
+
+
+def prove_jacobi_compat_d8(
+    N,
+    U: Expr,
+    eta: Expr,
+    mu: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+) -> ProofChain:
+    """(D.8) [the first Jacobi compatibility (4.36) in tilde
+    instantiation]: the Z-derivator of ``ℒ_U`` over the higher
+    Koszul bracket is measured by the ``𝒦̃``-twisted operators,
+
+        ℒ_U[η,μ]_Kos − [ℒ_Uη, μ]_Kos − [η, ℒ_Uμ]_Kos
+          = ℒ_{𝒦̃_η U} μ + 𝒦_{𝒦̃_μ U} η.
+
+    Paper route: two usual-Cartan commutator blocks — and indeed it
+    closes DECLARATION-FREE at the raw expression level (no FI: the
+    morphism property is never invoked)."""
+    from jacopy.central.tangent.exterior import CARTAN_TM
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.packages.drinfeld.calculus_conditions import kappa
+
+    def L(X, x):
+        return Act(CARTAN_TM.lie(X), x)
+
+    node = Sum(
+        L(U, nambu_koszul_bracket(N, eta, mu)),
+        Neg(nambu_koszul_bracket(N, L(U, eta), mu)),
+        Neg(nambu_koszul_bracket(N, eta, L(U, mu))),
+        Neg(L(kappa_tilde_nambu(N, eta, U), mu)),
+        Neg(kappa(kappa_tilde_nambu(N, mu, U), eta)),
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=False),
+        max_steps=max_steps,
+    )
+
+
+def prove_jacobi_compat_d10(
+    N,
+    omega: Expr,
+    eta: Expr,
+    W: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+) -> ProofChain:
+    """(D.10) [the third Jacobi compatibility (4.38) in tilde
+    instantiation, with the ``g_Z`` metric and ``𝔻_Z = d``]:
+
+        dι_{ℒ̃_ω W} η − dι_{d̃ι̃_η W} ω + dι_W [ω,η]_Kos
+          + d g_Z(𝒦_W ω, η) − d g_Z(dι_W η, ω) = 0.
+
+    Closes DECLARATION-FREE at the raw expression level via the
+    usual Cartan relations."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.packages.drinfeld.calculus_conditions import kappa
+    from jacopy.packages.drinfeld.double import lie_tilde_nambu
+
+    node = Sum(
+        d(
+            Act(
+                Interior(lie_tilde_nambu(N, omega, W)), eta
+            )
+        ),
+        Neg(
+            d(
+                Act(
+                    Interior(
+                        d_tilde(N, iota_tilde(W, eta))
+                    ),
+                    omega,
+                )
+            )
+        ),
+        d(
+            Act(
+                Interior(W),
+                nambu_koszul_bracket(N, omega, eta),
+            )
+        ),
+        d(g_z_pairing(N, kappa(W, omega), eta)),
+        Neg(
+            d(
+                g_z_pairing(
+                    N, d(iota_tilde(W, eta)), omega
+                )
+            )
+        ),
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=False),
+        max_steps=max_steps,
+    )
