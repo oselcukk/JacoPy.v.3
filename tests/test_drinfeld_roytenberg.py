@@ -90,9 +90,14 @@ class TestHClosure:
 
     def test_exact_h_satisfies_condition(self, p):
         """Corollary: H = dB (the Ševera image) passes (5.13) by
-        d² = 0. p = 2 takes ~14 s — keep an eye on runtime."""
-        if p == 2:
-            pytest.skip("1016-step closure verified offline (13.9s)")
+        d² = 0. The p = 2 closure takes ~14 s (1016 steps), so it
+        runs only with JACOPY_RUN_SLOW=1 (verified offline)."""
+        import os
+
+        if p == 2 and not os.environ.get("JACOPY_RUN_SLOW"):
+            pytest.skip(
+                "1016-step closure; set JACOPY_RUN_SLOW=1 to run"
+            )
         reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
         chain = ro.prove_h_closure_for_exact_h(
             N, B, U, V, W, slots, registry=reg
