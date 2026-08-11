@@ -190,7 +190,16 @@ class InteriorAnticommuteDefinition(Definition):
             return None
         X = expr.op.vector
         Y = inner.op.vector
-        if X._repr_inner() <= Y._repr_inner():
+        # Canonical order: SHARP-subscripted interiors outermost
+        # (so ι_W ι_{Πω} → −ι_{Πω} ι_W and the FI pairing-swap rule
+        # can see the sharp directly under d), then repr order.
+        def key(v):
+            return (
+                0 if isinstance(v, NambuSharpVF) else 1,
+                v._repr_inner(),
+            )
+
+        if key(X) <= key(Y):
             return None
         return sign, X, Y, inner.arg
 
@@ -203,14 +212,148 @@ class InteriorAnticommuteDefinition(Definition):
         return core if sign else Neg(core)
 
 
+class FISharpPairingSwapDefinition(Definition):
+    """THEOREM-tagged CONSEQUENCE of the declared FI (both
+    orientations + Lie antisymmetry):
+
+        Π( d( ι_{Πa} b ) ) → −Π( d( ι_{Πb} a ) )
+
+    applied as a canonical-ordering rewrite (fires when ``repr(a) >
+    repr(b)``; strictly order-reducing, hence terminating).
+
+    Derivation: FI gives [Πa,Πb] = Π[a,b]_Kos for BOTH orderings;
+    with [Πb,Πa] = −[Πa,Πb] and the Koszul symmetric part
+    [a,b] + [b,a] = d g_Z(a,b) this forces Π(d g_Z(a,b)) = 0, i.e.
+    Π(dι_{Πa}b) = −Π(dι_{Πb}a). THIS is the g_Z-family residual of
+    the (D.5)-(D.7) diagnosis — not an extra assumption, a derivable
+    face of the FI itself (found 2026-08-05 via the twisted-FI
+    consistency residual)."""
+
+    anchor = NambuSharpVF
+
+    def __init__(self, structure) -> None:
+        self._N = structure
+        self.name = (
+            "theorem (FI consequence): Π(dι_{Πa}b) = −Π(dι_{Πb}a)"
+        )
+
+    def _parts(self, expr: Expr):
+        from jacopy.central.calculus.bracket_calculus import (
+            ExteriorDerivative,
+        )
+
+        if not (
+            isinstance(expr, NambuSharpVF)
+            and expr.pi == self._N.pi
+        ):
+            return None
+        slot = expr.omega
+        if not (
+            isinstance(slot, Act)
+            and isinstance(slot.op, ExteriorDerivative)
+        ):
+            return None
+        inner = slot.arg
+        if not (
+            isinstance(inner, Act)
+            and isinstance(inner.op, Interior)
+            and isinstance(inner.op.vector, NambuSharpVF)
+            and inner.op.vector.pi == self._N.pi
+        ):
+            return None
+        a = inner.op.vector.omega
+        b = inner.arg
+        if a._repr_inner() <= b._repr_inner():
+            return None
+        return a, b
+
+    def matches(self, expr: Expr) -> bool:
+        return self._parts(expr) is not None
+
+    def rewrite(self, expr: Expr) -> Expr:
+        a, b = self._parts(expr)
+        return Neg(
+            self._N.sharp_vf(
+                d(Act(Interior(self._N.sharp_vf(b)), a))
+            )
+        )
+
+    def theorem_proof_builder(self):
+        from jacopy.proof.step import ProofStep
+
+        def _builder(matched: Expr) -> ProofChain:
+            return ProofChain(
+                [
+                    ProofStep(
+                        matched,
+                        self.rewrite(matched),
+                        rule=(
+                            "FI (both orientations) + Lie "
+                            "antisymmetry + Koszul symmetric part"
+                        ),
+                        justification=(
+                            "Π(d g_Z(a,b)) = 0 follows from the "
+                            "declared FI applied to [Πa,Πb] and "
+                            "[Πb,Πa]"
+                        ),
+                    )
+                ]
+            )
+
+        return _builder
+
+
+class NambuSharpPairingEvalDefinition(Definition):
+    """p = 1 evaluation view: ``⟨β, Πα⟩ → Π(α, β)`` (an alternating
+    two-slot evaluation of the bivector) — definitional, the Pairing
+    face of the sharp's contraction. Lets the canonical alternating
+    sort merge ``⟨η,Πω⟩`` with ``−⟨ω,Πη⟩`` (the p = 1 g_Z
+    degeneration)."""
+
+    anchor = None  # Pairing (set in __init__)
+
+    def __init__(self, structure, registry=None) -> None:
+        from jacopy.core.pairing import Pairing
+
+        self._N = structure
+        self._registry = registry
+        self.anchor = Pairing
+        self.name = (
+            "Nambu sharp pairing evaluation: ⟨β, Πα⟩ = Π(α, β)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.pairing import Pairing
+
+        return (
+            isinstance(expr, Pairing)
+            and self._N.p == 1
+            and isinstance(expr.X, NambuSharpVF)
+            and expr.X.pi == self._N.pi
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.multi_eval import MultiEval
+
+        return MultiEval(
+            self._N.pi,
+            expr.X.omega,
+            expr.alpha,
+            alternating=True,
+            slot_kind="covector",
+        )
+
+
 def _tilde_engine(N, registry, *, declare_fi: bool):
     from jacopy.packages.drinfeld.twist import _twist_engine
 
     eng = _twist_engine(N, registry)
     eng.register(LieIotaCommutatorDefinition())
     eng.register(InteriorAnticommuteDefinition())
+    eng.register(NambuSharpPairingEvalDefinition(N, registry))
     if declare_fi:
         eng.register(NambuMorphismDeclaration(N))
+        eng.register(FISharpPairingSwapDefinition(N))
     return eng
 
 

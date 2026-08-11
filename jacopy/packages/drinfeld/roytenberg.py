@@ -41,6 +41,7 @@ from jacopy.algebra.derivation import Act
 from jacopy.core.expr import Expr, Integer, Neg, Sum
 from jacopy.core.registry import PropertyRegistry
 from jacopy.proof.chain import ProofChain
+from jacopy.proof.expansion import Definition
 from jacopy.central.objects.interior import Interior
 from jacopy.central.tangent.exterior import CARTAN_TM, d
 from jacopy.central.tangent.lie_bracket import lie_bracket
@@ -350,4 +351,194 @@ def twisted_calculus_obstruction_one(
         Neg(h_term(H, U, kappa_tilde_nambu(N, mu, V))),
         h_term(H, V, kappa_tilde_nambu(N, mu, U)),
         nambu_koszul_bracket(N, h_term(H, U, V), mu),
+    )
+
+
+# ------------------------------------------------------------------- #
+# 6.F.3 — proto bialgebroid master equations, bosonic dictionary       #
+# ------------------------------------------------------------------- #
+#
+# The graded master equation {Θ,Θ} = 0 with Θ = μ + γ + φ + ψ splits
+# into (3.11)-(3.15). Bosonic reading for the concrete data
+# (A = TM: μ = Lie/de Rham; γ = Π; φ = H; ψ = 0 — quasi-Lie case):
+#
+#   (3.14) {μ,φ} = 0        ⟺  dH = 0        — measured EXACTLY by
+#          the (5.13)/Jacobi theorems above (defect = ιιι dH);
+#   (3.11) ½{μ,μ} + {γ,φ}   ⟺  the H-TWISTED fundamental identity:
+#          [Πω,Πη] = Π[ω,η]_Kos + Π(H(Πω,Πη))  (twisted-Poisson);
+#          consumed as the opt-in TwistedFIDeclaration below;
+#   (3.12)/(3.13)/(3.15) need a free trivector ψ (an R-side 3-tensor
+#          independent of Π) — deferred until a consumer arrives
+#          (definition policy; our R is DERIVED: r_twist).
+
+
+def r_twist_h(N, H: Expr, omega: Expr, eta: Expr) -> Expr:
+    """The H-corrected R-twist [eq (7.25) with H]:
+
+        R′_H(ω,η) = [Πω,Πη] − Π[ω,η]_Kos − Π( H(Πω, Πη) ).
+
+    Its vanishing is the H-TWISTED fundamental identity — the
+    bosonic (3.11)."""
+    return Sum(
+        r_twist(N, omega, eta),
+        Neg(
+            N.sharp_vf(
+                h_term(H, N.sharp_vf(omega), N.sharp_vf(eta))
+            )
+        ),
+    )
+
+
+class TwistedFIDeclaration(Definition):
+    """DECLARED H-twisted fundamental identity (bosonic (3.11), the
+    twisted-Poisson condition):
+
+        [Πω, Πη]_Lie → Π[ω,η]_Kos + Π( ι_{Πη} ι_{Πω} H ).
+
+    Opt-in; reduces to :class:`NambuMorphismDeclaration` at H = 0."""
+
+    anchor = None  # set in __init__ (LieBracketVF)
+
+    def __init__(self, structure, H: Expr) -> None:
+        from jacopy.algebra.lie_bracket_vf import LieBracketVF
+        from jacopy.packages.poisson.nambu import NambuSharpVF
+
+        self._N = structure
+        self._H = H
+        self._VF = LieBracketVF
+        self._Sharp = NambuSharpVF
+        self.anchor = LieBracketVF
+        self.name = (
+            "declared H-twisted FI: [Πω,Πη] = Π[ω,η]_Kos + Π H(Πω,Πη)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        if not isinstance(expr, self._VF):
+            return False
+        X, Y = expr.X, expr.Y
+        return (
+            isinstance(X, self._Sharp)
+            and isinstance(Y, self._Sharp)
+            and X.pi == self._N.pi
+            and Y.pi == self._N.pi
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        om, et = expr.X.omega, expr.Y.omega
+        return Sum(
+            self._N.sharp_vf(
+                nambu_koszul_bracket(self._N, om, et)
+            ),
+            self._N.sharp_vf(
+                h_term(
+                    self._H,
+                    self._N.sharp_vf(om),
+                    self._N.sharp_vf(et),
+                )
+            ),
+        )
+
+
+def prove_twisted_fi_kills_r_twist_h(
+    N,
+    H: Expr,
+    omega: Expr,
+    eta: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Consistency of the bosonic (3.11): under the declared
+    H-twisted FI the corrected R-twist ``R′_H`` vanishes — acting on
+    the probe ``h``. (At H = 0 this is the 6.E statement "FI kills
+    the R-twist".)"""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        FISharpPairingSwapDefinition,
+    )
+
+    eng = _tilde_engine(N, registry, declare_fi=False)
+    eng.register(TwistedFIDeclaration(N, H))
+    # The pairing-swap consequence holds under the TWISTED FI too:
+    # the H-parts are antisymmetric and cancel in the symmetric
+    # combination, leaving Π(d g_Z) = 0 unchanged.
+    eng.register(FISharpPairingSwapDefinition(N))
+    node = Act(r_twist_h(N, H, omega, eta), h)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=eng,
+        max_steps=max_steps,
+    )
+
+
+def prove_r_twist_h_correction_bilinear(
+    N,
+    H: Expr,
+    omega: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> Tuple[ProofChain, ProofChain]:
+    """The H-correction ``Π H(Πω, Πη)`` of ``R′_H`` is C∞-BILINEAR
+    (sharp + interior tensoriality) — hence the first-entry
+    linearity anomaly of ``R′_H`` is exactly the H-INDEPENDENT
+    (7.26) anomaly ``−Π(df ∧ g_Z)``. Returns the two chains (first
+    slot, second slot); probe ``h``."""
+    from jacopy.core.expr import Product
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    def corr(a, b):
+        return N.sharp_vf(
+            h_term(H, N.sharp_vf(a), N.sharp_vf(b))
+        )
+
+    chains = []
+    for lhs, rhs in (
+        (
+            corr(Product(f, omega), eta),
+            Product(f, corr(omega, eta)),
+        ),
+        (
+            corr(omega, Product(f, eta)),
+            Product(f, corr(omega, eta)),
+        ),
+    ):
+        node = Act(Sum(lhs, Neg(rhs)), h)
+        chains.append(
+            ExpandAndSimplify().prove(
+                node,
+                Integer(0),
+                registry=registry,
+                engine=_tilde_engine(
+                    N, registry, declare_fi=False
+                ),
+                max_steps=max_steps,
+            )
+        )
+    return chains[0], chains[1]
+
+
+def jacobiator_a_obstruction(
+    N, H: Expr, U: Expr, V: Expr, W: Expr
+) -> Expr:
+    """The RHS of the twisted Jacobiator requirement (5.12) for the
+    concrete data (the A-bracket is Lie, so its Jacobiator vanishes
+    and the requirement forces this combination to vanish):
+
+        −𝒦̃_{H(V,W)} U + ℒ̃_{H(U,V)} W + 𝒦̃_{H(U,W)} V.
+
+    Generic ``(Π, H)`` do NOT satisfy it (honest-fail pinned) —
+    mixing the H-twist into the tilde slots is a genuine
+    constraint."""
+    return Sum(
+        Neg(kappa_tilde_nambu(N, h_term(H, V, W), U)),
+        lie_tilde_nambu(N, h_term(H, U, V), W),
+        kappa_tilde_nambu(N, h_term(H, U, W), V),
     )

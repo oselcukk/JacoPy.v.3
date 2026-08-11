@@ -152,3 +152,50 @@ class TestTwistedJacobi:
                 engine=_tilde_engine(N, reg, declare_fi=False),
                 max_steps=20000,
             )
+
+
+@pytest.mark.parametrize("p", [1, 2])
+class TestMasterEquationDictionary:
+    """6.F.3: bosonic readings of the proto-bialgebroid master
+    equations (3.11)-(3.15) for (μ, γ, φ, ψ) = (Lie, Π, H, 0)."""
+
+    def test_twisted_fi_kills_r_twist_h(self, p):
+        """(3.11) consistency: under the declared H-twisted FI the
+        corrected R-twist R′_H vanishes (twisted-Poisson shape)."""
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
+        chain = ro.prove_twisted_fi_kills_r_twist_h(
+            N, H, om, et, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_h_correction_is_bilinear(self, p):
+        """The H-correction of R′_H is C∞-bilinear — the (7.26)
+        anomaly is H-independent."""
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
+        c1, c2 = ro.prove_r_twist_h_correction_bilinear(
+            N, H, om, et, f, h, registry=reg
+        )
+        assert c1.steps and c2.steps
+
+    def test_jacobiator_a_obstruction_pinned(self, p):
+        """(5.12): generic (Π, H) violate the A-Jacobiator
+        requirement — honest-fail pinned."""
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Integer
+        from jacopy.proof.strategies import ProofFailure
+        from jacopy.packages.drinfeld.tilde_calculus import (
+            _tilde_engine,
+        )
+
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
+        node = Act(
+            ro.jacobiator_a_obstruction(N, H, U, V, W), h
+        )
+        with pytest.raises(ProofFailure):
+            ExpandAndSimplify().prove(
+                node,
+                Integer(0),
+                registry=reg,
+                engine=_tilde_engine(N, reg, declare_fi=False),
+                max_steps=20000,
+            )

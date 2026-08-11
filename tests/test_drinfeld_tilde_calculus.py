@@ -64,13 +64,32 @@ class TestJacobiCompatibility:
         assert chain.steps
 
 
-class TestCalculusConditionsHonestState:
-    """(D.5)-(D.7) pinned OPEN — see the module docstring. If one of
-    these starts closing, celebrate AND update the records."""
+class TestCalculusConditionsClosed:
+    """(D.5)-(D.7) at p ≥ 2: CLOSED 2026-08-05 — the "g_Z family"
+    residual turned out to be a DERIVABLE consequence of the FI
+    itself (both orientations + Lie antisymmetry force
+    Π(d g_Z) = 0, the FISharpPairingSwap rule), discovered via the
+    twisted-FI consistency residual in 6.F.3."""
 
-    @pytest.mark.parametrize("p", [1, 2])
-    def test_d5_still_open(self, p):
-        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(p)
+    @pytest.mark.parametrize("cond", [1, 2, 3])
+    def test_d5_d6_d7_close_at_p2(self, cond):
+        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(2)
+        prover = {
+            1: tc.prove_tilde_calculus_condition_one,
+            2: tc.prove_tilde_calculus_condition_two,
+            3: tc.prove_tilde_calculus_condition_three,
+        }[cond]
+        chain, _ = prover(N, om, et, W, f, h, registry=reg)
+        assert chain.steps
+
+
+class TestCalculusConditionsHonestState:
+    """The p = 1 face of (D.5)-(D.7) stays OPEN — the residual is
+    the recorded 5.E.2b bracket-pairing family (⟨η,[W,Πω]⟩ bridge
+    shapes), per the standing honesty decision."""
+
+    def test_d5_still_open_p1(self):
+        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(1)
         with pytest.raises(ProofFailure):
             tc.prove_tilde_calculus_condition_one(
                 N, om, et, W, f, h, registry=reg
