@@ -398,3 +398,130 @@ def prove_exceptional_right_leibniz(
             )
         )
     return chains[0], chains[1]
+
+
+# ------------------------------------------------------------------- #
+# 6.H.2 — multivector interior, the ⊛ map, decomposition readings      #
+# ------------------------------------------------------------------- #
+
+
+def boxtimes(N3, omega5: Expr) -> Expr:
+    """``(Π₃ ⊛ Π₃)(ω₅) := ½ Π₃( ι_{Π₃} ω₅ )`` [E6 paper eq (4.14)]
+    — the TM-valued pentavector of the exceptional Ψ_Π twist,
+    buildable now that the PARTIAL contraction ``ι_{Π₃}: Λ⁵ → Λ²``
+    exists (:class:`MultivectorInterior`). ``N3`` is the
+    ``nambu_structure(p=2)`` host of the trivector ``Π₃``."""
+    from jacopy.core.expr import Product, Rational
+    from jacopy.central.objects.multivector_interior import (
+        MultivectorInterior,
+    )
+
+    return Product(
+        Rational(1, 2),
+        N3.sharp_vf(
+            Act(MultivectorInterior(N3.pi), omega5)
+        ),
+    )
+
+
+def exceptional_h_reading(
+    U: Expr, om2: Expr, V: Expr, et2: Expr
+) -> Expr:
+    """The (8.2) H-twist reading of the cross-term for the
+    decomposition ``A = TM ⊕ Λ², Z = Λ⁵``:
+    ``H(U+ω₂, V+η₂) = −η₂ ∧ dω₂``."""
+    return Neg(Wedge(et2, d(om2)))
+
+
+def prove_exceptional_h_second_entry_linear(
+    U: Expr,
+    om2: Expr,
+    V: Expr,
+    et2: Expr,
+    f: Expr,
+    slots5,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+) -> ProofChain:
+    """(8.2)-H is C∞-linear in its SECOND entry [the (5.6) twisted
+    linearity]: ``H(e₁, f·e₂) = f·H(e₁, e₂)`` — the cross-term is
+    tensorial in ``η₂``. Declaration-free, on 5 slots."""
+    from jacopy.core.pairing import Pairing
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.packages.drinfeld.double import _ev
+    from jacopy.packages.poisson.nambu import nambu_structure
+
+    N = nambu_structure(p=2)
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _tilde_engine,
+    )
+
+    node = _ev(
+        Sum(
+            exceptional_h_reading(U, om2, V, Product(f, et2)),
+            Neg(
+                Product(
+                    f,
+                    exceptional_h_reading(U, om2, V, et2),
+                )
+            ),
+        ),
+        slots5,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=False),
+        max_steps=max_steps,
+    )
+
+
+def prove_exceptional_h_first_entry_symbol(
+    U: Expr,
+    om2: Expr,
+    V: Expr,
+    et2: Expr,
+    f: Expr,
+    slots5,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+) -> ProofChain:
+    """(8.2)-H's FIRST-entry anomaly [the (5.7) symbol map]:
+
+        H(f·e₁, e₂) − f·H(e₁, e₂) = −η₂ ∧ df ∧ ω₂
+
+    — the exact symbol, from the ``dω₂`` leg's Leibniz split.
+    Declaration-free, on 5 slots."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.packages.drinfeld.double import _ev
+    from jacopy.packages.poisson.nambu import nambu_structure
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _tilde_engine,
+    )
+
+    N = nambu_structure(p=2)
+    node = _ev(
+        Sum(
+            exceptional_h_reading(
+                U, Product(f, om2), V, et2
+            ),
+            Neg(
+                Product(
+                    f,
+                    exceptional_h_reading(U, om2, V, et2),
+                )
+            ),
+            Wedge(et2, Wedge(d(f), om2)),
+        ),
+        slots5,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=False),
+        max_steps=max_steps,
+    )

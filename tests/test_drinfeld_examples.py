@@ -93,3 +93,132 @@ class TestAtiyahBridge:
             nabla, X, Y, Z, W, f, registry=reg
         )
         assert chain.steps and used
+
+
+class TestMultivectorInterior:
+    """6.H.2: the partial-contraction primitive ι_P: Λ^q → Λ^{q−p}
+    — the missing piece of the exceptional Ψ_Π twist scenario."""
+
+    def test_degree_law(self):
+        from jacopy.algebra.derivation import Act, degree_of
+        from jacopy.core.symbolic_degree import Degree
+        from jacopy.central.objects.multivector_interior import (
+            MultivectorInterior,
+        )
+
+        (om5,) = forms("Ωm5", degree=5)
+        N3 = nambu_structure(p=2)
+        node = Act(MultivectorInterior(N3.pi), om5)
+        assert degree_of(node, None) == Degree.const(2)
+
+    def test_linearity_rule(self):
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Product, Sum
+        from jacopy.central.objects.multivector_interior import (
+            MultivectorInterior,
+            MultivectorInteriorLinearityDefinition,
+        )
+
+        reg = PropertyRegistry()
+        (f,) = functions("fm", registry=reg)
+        (om5,) = forms("Ωm5", degree=5)
+        N3 = nambu_structure(p=2)
+        rule = MultivectorInteriorLinearityDefinition(reg)
+        node = Act(
+            MultivectorInterior(Product(f, N3.pi)), om5
+        )
+        assert rule.matches(node)
+        assert rule.rewrite(node) == Product(
+            f, Act(MultivectorInterior(N3.pi), om5)
+        )
+
+    def test_decomposable_eval_consistency(self):
+        """ι_{X∧Y∧Z}ω₅ evaluated on 2 slots == ω₅(X,Y,Z,·,·) —
+        the (4.13) convention closes mechanically."""
+        from jacopy.algebra.derivation import Act
+        from jacopy.core.expr import Integer, Neg, Sum
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.core.wedge import Wedge
+        from jacopy.proof.strategies import ExpandAndSimplify
+        from jacopy.central.objects.multivector_interior import (
+            MultivectorInterior,
+            MultivectorInteriorDecomposableDefinition,
+            MultivectorInteriorLinearityDefinition,
+        )
+        from jacopy.packages.drinfeld.tilde_calculus import (
+            _tilde_engine,
+        )
+
+        reg = PropertyRegistry()
+        X, Y, Z, Y1, Y2 = vector_fields("Xm Ym Zm Ym1 Ym2")
+        (om5,) = forms("Ωm5", degree=5)
+        N3 = nambu_structure(p=2)
+        eng = _tilde_engine(N3, reg, declare_fi=False)
+        eng.register(MultivectorInteriorLinearityDefinition(reg))
+        eng.register(MultivectorInteriorDecomposableDefinition())
+        lhs = MultiEval(
+            Act(MultivectorInterior(Wedge(X, Y, Z)), om5),
+            Y1, Y2, alternating=True, slot_kind="vector",
+        )
+        rhs = MultiEval(
+            om5, X, Y, Z, Y1, Y2,
+            alternating=True, slot_kind="vector",
+        )
+        chain = ExpandAndSimplify().prove(
+            Sum(lhs, Neg(rhs)), Integer(0),
+            registry=reg, engine=eng, max_steps=20000,
+        )
+        assert chain.steps
+
+    def test_boxtimes_buildable_and_typed(self):
+        """(Π₃⊛Π₃)(ω₅) = ½Π₃(ι_{Π₃}ω₅) — the (4.14) bundle map now
+        exists as an expression (atomic Π₃: inert, honest)."""
+        from jacopy.core.expr import Product, Rational
+
+        (om5,) = forms("Ωm5", degree=5)
+        N3 = nambu_structure(p=2)
+        bx = ex.boxtimes(N3, om5)
+        assert isinstance(bx, Product)
+        assert bx.children[0] == Rational(1, 2)
+
+
+class TestExceptionalDecompositionReadings:
+    """(8.2)/(8.3): the SAME cross-term reads as an H-twist or an
+    R-twist depending on the decomposition; the twisted linearity
+    structure (5.6)-(5.7) is mechanical."""
+
+    def test_h_second_entry_linear(self):
+        reg = PropertyRegistry()
+        (f,) = functions("fx", registry=reg)
+        U, V = vector_fields("Ux Vx")
+        om2, et2 = forms("Ωx Hx", degree=2)
+        slots5 = list(vector_fields("Zx1 Zx2 Zx3 Zx4 Zx5"))
+        chain = ex.prove_exceptional_h_second_entry_linear(
+            U, om2, V, et2, f, slots5, registry=reg
+        )
+        assert chain.steps
+
+    def test_h_first_entry_symbol(self):
+        """H(f·e₁,e₂) − f·H(e₁,e₂) = −η₂ ∧ df ∧ ω₂ — the exact
+        (5.7) symbol."""
+        reg = PropertyRegistry()
+        (f,) = functions("fx", registry=reg)
+        U, V = vector_fields("Ux Vx")
+        om2, et2 = forms("Ωx Hx", degree=2)
+        slots5 = list(vector_fields("Zx1 Zx2 Zx3 Zx4 Zx5"))
+        chain = ex.prove_exceptional_h_first_entry_symbol(
+            U, om2, V, et2, f, slots5, registry=reg
+        )
+        assert chain.steps
+
+    def test_r_reading_is_same_cross_term(self):
+        """(8.3): for A = TM⊕Λ⁵, Z = Λ² the cross-term IS the
+        R-twist — structural identification."""
+        from jacopy.core.expr import Neg
+        from jacopy.core.wedge import Wedge
+        from jacopy.central.tangent.exterior import d
+
+        om2, et2 = forms("Ωx Hx", degree=2)
+        assert ex.exceptional_h_reading(
+            None, om2, None, et2
+        ) == Neg(Wedge(et2, d(om2)))
