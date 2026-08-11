@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Tuple
 
-from jacopy.core.expr import Atom, Expr, Integer, Neg, Product, Rational
+from jacopy.core.expr import Atom, Expr, Integer, Neg, Product, Rational, Sum
 from jacopy.core.properties import Graded, Scalar
 from jacopy.core.registry import PropertyRegistry
 from jacopy.core.symbolic_degree import Degree, DegreeLike, as_degree
@@ -141,9 +141,10 @@ def degree_of(
     * Registry :class:`Graded`, its own degree.
     * Otherwise, :class:`ValueError`.
 
-    :class:`Sum` is intentionally *not* walked: a Sum has a degree only
-    when every term's degree agrees, and that policy is cleaner kept in
-    the caller that needs it.
+    :class:`Sum` is graded only when HOMOGENEOUS: every term must
+    share one degree (else :class:`ValueError`) — policy revised in
+    Phase 6.H, when collected scalar Sums started appearing as
+    Product factors under the sorting pass.
     """
     # Atoms that carry their own degree on the instance: Derivation
     # (and its subclass VectorField), Form, later PVector / Tensor …
@@ -161,6 +162,17 @@ def degree_of(
         for c in expr.children:
             total = total + degree_of(c, registry)
         return total
+    # Homogeneous Sum: all terms share one degree (Phase 6.H — the
+    # 5-slot exceptional evaluations leave scalar Sums as collected
+    # Product factors, and the sorting pass must grade them).
+    if isinstance(expr, Sum) and expr.children:
+        first = degree_of(expr.children[0], registry)
+        for c in expr.children[1:]:
+            if degree_of(c, registry) != first:
+                raise ValueError(
+                    f"Sum {expr!r} is not degree-homogeneous"
+                )
+        return first
     # Wedge: degree law ``|α ∧ β| = |α| + |β|``. Late import to avoid
     # forcing the wedge module on every algebra import; the algebra
     # layer otherwise has no wedge dependency.
