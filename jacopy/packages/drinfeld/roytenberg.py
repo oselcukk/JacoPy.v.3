@@ -231,3 +231,123 @@ def prove_h_closure_for_exact_h(
         engine=_tilde_engine(N, registry, declare_fi=False),
         max_steps=max_steps,
     )
+
+
+def prove_h_twisted_jacobi_measures_dh(
+    N,
+    H: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    W: Expr,
+    mu: Expr,
+    f: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+):
+    """THE 6.F.2 theorem — the classical "twisted Courant ⟺ dH = 0"
+    mechanically: the form-component Leibniz-Jacobi defect of the
+    H-TWISTED Dorfman bracket is exactly the ``dH`` evaluation,
+
+        form( [e₁,[e₂,e₃]]_H − [[e₁,e₂]_H,e₃]_H − [e₂,[e₁,e₃]]_H )
+            = ι_W ι_V ι_U dH
+
+    (sign fixed by the engine, consistent with the (5.13) sweep),
+    declaration-free (generalizes the 6.C Leibniz-Jacobi, which is
+    the ``H = 0`` case; the vector components never see ``H``).
+    Corollary: ``H = dB`` restores Jacobi (``d² = 0``) — the Ševera
+    twist of a Courant structure is again Courant. Evaluated on the
+    given slots; VF-Jacobi enters as cited instances."""
+    from jacopy.central.tangent.cartan import (
+        prove_with_bracket_identities,
+    )
+    from jacopy.packages.drinfeld.double import _ev
+    from jacopy.packages.drinfeld.twist import dorfman_double_h
+
+    def nest(U1, o1, U2, o2, U3, o3):
+        iv, if_ = dorfman_double_h(H, U2, o2, U3, o3)
+        return dorfman_double_h(H, U1, o1, iv, if_)[1]
+
+    v12, f12 = dorfman_double_h(H, U, omega, V, eta)
+    defect = Sum(
+        nest(U, omega, V, eta, W, mu),
+        Neg(dorfman_double_h(H, v12, f12, W, mu)[1]),
+        Neg(nest(V, eta, U, omega, W, mu)),
+        Neg(
+            Act(
+                Interior(W),
+                Act(Interior(V), Act(Interior(U), d(H))),
+            )
+        ),
+    )
+    node = _ev(defect, slots)
+    return prove_with_bracket_identities(
+        node,
+        Integer(0),
+        f,
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=False),
+        max_steps=max_steps,
+    )
+
+
+def prove_fi_collapses_twisted_compat(
+    N,
+    H: Expr,
+    U: Expr,
+    eta: Expr,
+    mu: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """The twisted Jacobi compatibility (5.14) differs from the
+    proven untwisted (D.8) by the single term ``−H(U, R(η,μ))``.
+    Under the declared FI the R-twist dies INSIDE the H-slot
+    (the Interior slot protocol carries the node-face declaration
+    into ``ι_{R(η,μ)}``), so the twisted family COLLAPSES to the
+    untwisted one:
+
+        H(U, R(η,μ)) = 0        (FI declared).
+
+    Evaluated on the given slots."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    node = _ev_forms(
+        h_term(H, U, r_twist(N, eta, mu)), slots
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_tilde_engine(N, registry, declare_fi=True),
+        max_steps=max_steps,
+    )
+
+
+def _ev_forms(expr: Expr, slots) -> Expr:
+    from jacopy.packages.drinfeld.double import _ev
+
+    return _ev(expr, slots)
+
+
+def twisted_calculus_obstruction_one(
+    N, H: Expr, U: Expr, V: Expr, mu: Expr
+) -> Expr:
+    """The RHS of the first twisted calculus condition (5.9) for the
+    concrete data — the obstruction that must vanish for the twisted
+    triplet to remain a calculus:
+
+        −H(U, 𝒦̃_μ V) + H(V, 𝒦̃_μ U) + [H(U,V), μ]_Kos.
+
+    (The LHS is the usual C.1 commutator, zero by 6.A.) Generic
+    ``(Π, H)`` do NOT satisfy it — pinned by an honest-fail test."""
+    return Sum(
+        Neg(h_term(H, U, kappa_tilde_nambu(N, mu, V))),
+        h_term(H, V, kappa_tilde_nambu(N, mu, U)),
+        nambu_koszul_bracket(N, h_term(H, U, V), mu),
+    )

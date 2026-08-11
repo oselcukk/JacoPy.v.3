@@ -98,3 +98,57 @@ class TestHClosure:
             N, B, U, V, W, slots, registry=reg
         )
         assert chain.steps
+
+
+class TestTwistedJacobi:
+    """6.F.2: the classical 'twisted Courant ⟺ dH = 0', mechanical."""
+
+    def test_jacobi_defect_equals_dh_p1(self):
+        """Form-component Leibniz-Jacobi defect of the H-twisted
+        Dorfman bracket = ι_Wι_Vι_U dH (declaration-free, no cited
+        instances needed). p = 2 verified offline: 1613 steps/21 s."""
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(1)
+        (mu,) = forms("μr", degree=1)
+        chain, used = ro.prove_h_twisted_jacobi_measures_dh(
+            N, H, U, om, V, et, W, mu, f, slots, registry=reg
+        )
+        assert chain.steps
+
+    @pytest.mark.parametrize("p", [1, 2])
+    def test_fi_collapses_twisted_compat(self, p):
+        """(5.14)'s extra term H(U, R(η,μ)) dies under the declared
+        FI — the twisted Jacobi-compat family collapses to the
+        proven untwisted (D.8)."""
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
+        (mu,) = forms("μr", degree=p)
+        chain = ro.prove_fi_collapses_twisted_compat(
+            N, H, U, et, mu, slots, registry=reg
+        )
+        assert chain.steps
+
+    @pytest.mark.parametrize("p", [1, 2])
+    def test_twisted_calculus_obstruction_pinned_open(self, p):
+        """(5.9)-1: generic (Π, H) do NOT satisfy the twisted
+        calculus condition — the obstruction is honest-nonzero
+        (mixing H with the tilde side is a genuine constraint)."""
+        from jacopy.core.expr import Integer
+        from jacopy.proof.strategies import ProofFailure
+        from jacopy.packages.drinfeld.double import _ev
+        from jacopy.packages.drinfeld.tilde_calculus import (
+            _tilde_engine,
+        )
+
+        reg, f, h, U, V, W, om, et, B, H, slots, N = _setup(p)
+        (mu,) = forms("μr", degree=p)
+        node = _ev(
+            ro.twisted_calculus_obstruction_one(N, H, U, V, mu),
+            slots,
+        )
+        with pytest.raises(ProofFailure):
+            ExpandAndSimplify().prove(
+                node,
+                Integer(0),
+                registry=reg,
+                engine=_tilde_engine(N, reg, declare_fi=False),
+                max_steps=20000,
+            )
