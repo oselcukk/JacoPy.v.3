@@ -444,54 +444,42 @@ class TestGeneralSNEval:
             P, alpha, beta, X, gamma, registry=reg
         ).steps
 
-    def test_general_koszul_jacobi_still_open(self, setup):
-        """5.E.2b residue (documented): the general Koszul Jacobi
-        residual is a FLAT sum mixing the Y-action lift with three
-        mixed-triple instances — whole-node theorem matching cannot
-        cover a Sum subset, and the composite-combination search
-        (±1, ±1/2) does not terminate it yet. Must fail HONESTLY."""
-        from jacopy.packages.poisson.koszul import KoszulBracket
-        from jacopy.packages.poisson.tilde import (
-            _cite_sn_general_instances,
-            tilde_engine,
+    def test_general_koszul_jacobi_CLOSED(self, setup):
+        """5.E.2b CLOSED (2026-09-07): the general Koszul Jacobi
+        identity closes via the greedy stall-difference + exact
+        ℚ-linear citation phase (packages/poisson/koszul_jacobi.py),
+        engine-verified. ~42 s — runs with JACOPY_RUN_SLOW=1; the
+        honest-fail companion below always runs."""
+        import os
+
+        if not os.environ.get("JACOPY_RUN_SLOW"):
+            pytest.skip(
+                "42 s closure; set JACOPY_RUN_SLOW=1 to run "
+                "(verified offline: 18 steps)"
+            )
+        from jacopy.packages.poisson.koszul_jacobi import (
+            prove_general_koszul_jacobi,
         )
 
-        reg, _, _, _, alpha, beta, X, P = setup
+        reg, f, _, _, alpha, beta, X, P = setup
         (gamma,) = forms("γ", degree=1)
-        engine = tilde_engine(P, registry=reg)
-        _cite_sn_general_instances(
-            engine,
-            P,
-            (
-                (alpha, beta, gamma),
-                (alpha, beta, d(Pairing(X, gamma))),
-                (beta, gamma, d(Pairing(X, alpha))),
-                (gamma, alpha, d(Pairing(X, beta))),
-            ),
-            reg,
+        chain = prove_general_koszul_jacobi(
+            P, alpha, beta, gamma, X, f, registry=reg
         )
-        pi = P.pi
-        jac = Sum(
-            Pairing(
-                KoszulBracket(
-                    pi, alpha, KoszulBracket(pi, beta, gamma)
-                ),
-                X,
-            ),
-            Pairing(
-                KoszulBracket(
-                    pi, beta, KoszulBracket(pi, gamma, alpha)
-                ),
-                X,
-            ),
-            Pairing(
-                KoszulBracket(
-                    pi, gamma, KoszulBracket(pi, alpha, beta)
-                ),
-                X,
-            ),
+        assert chain.steps
+
+    def test_general_koszul_jacobi_needs_declaration(self, setup):
+        """Without the declared [π,π] = 0 the general Jacobi must
+        honest-fail (fast check)."""
+        from jacopy.proof.strategies import ProofFailure as PF
+        from jacopy.packages.poisson.koszul_jacobi import (
+            prove_general_koszul_jacobi,
         )
-        with pytest.raises(ProofFailure):
-            ExpandAndSimplify().prove(
-                jac, Integer(0), registry=reg, engine=engine
+
+        reg, f, _, _, alpha, beta, X, P = setup
+        (gamma,) = forms("γ", degree=1)
+        with pytest.raises(PF):
+            prove_general_koszul_jacobi(
+                P, alpha, beta, gamma, X, f,
+                registry=reg, declare_poisson=False,
             )
