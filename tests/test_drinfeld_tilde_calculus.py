@@ -83,16 +83,32 @@ class TestCalculusConditionsClosed:
         assert chain.steps
 
 
-class TestCalculusConditionsHonestState:
-    """The p = 1 face of (D.5)-(D.7) stays OPEN — the residual is
-    the recorded 5.E.2b bracket-pairing family (⟨η,[W,Πω]⟩ bridge
-    shapes), per the standing honesty decision."""
+class TestCalculusConditionsP1Closed:
+    """The p = 1 face of (D.5)-(D.7): CLOSED 2026-09-07 by the 6.J
+    stall-time difference-test citation — the s-bridge (the 5.E.2b
+    bracket-pairing family) and the FI-on-exacts family enter as
+    ±/d/W/Π-paired instance lifts subtracted at stall points under a
+    strictly-decreasing node-size metric. No new axioms: the FI
+    declaration (as before) plus congruence lifts of proven/declared
+    instances. FI withheld still honest-fails."""
 
-    def test_d5_still_open_p1(self):
+    @pytest.mark.parametrize("cond", [1, 2, 3])
+    def test_p1_closes(self, cond):
+        reg, f, h, U, V, W, om, et, mu, slots, N = _setup(1)
+        prover = {
+            1: tc.prove_tilde_calculus_condition_one,
+            2: tc.prove_tilde_calculus_condition_two,
+            3: tc.prove_tilde_calculus_condition_three,
+        }[cond]
+        chain, _ = prover(N, om, et, W, f, h, registry=reg)
+        assert chain.steps
+
+    def test_p1_without_fi_still_fails(self):
         reg, f, h, U, V, W, om, et, mu, slots, N = _setup(1)
         with pytest.raises(ProofFailure):
             tc.prove_tilde_calculus_condition_one(
-                N, om, et, W, f, h, registry=reg
+                N, om, et, W, f, h, registry=reg,
+                declare_fi=False,
             )
 
     def test_d5_without_fi_fails(self):

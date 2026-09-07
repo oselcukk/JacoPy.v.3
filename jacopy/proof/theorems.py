@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator, Optional, Tuple
 
-from jacopy.core.expr import Expr, Integer, Sum
+from jacopy.core.expr import Expr, Integer, Sum, Neg
 from jacopy.proof.chain import ProofChain
 from jacopy.proof.expansion import Definition, ExpansionEngine
 
@@ -191,11 +191,27 @@ class TheoremDefinition(Definition):
     inlines the derivation.
     """
 
-    def __init__(self, theorem: Theorem, *, reverse: bool = False) -> None:
+    #: Re-entrancy guard for modulo-normalization matching: while a
+    #: nested normalization runs, every TheoremDefinition falls back
+    #: to exact matching (sound — the nested pass just sees fewer
+    #: rewrites), preventing infinite regress.
+    _IN_MODULO = False
+
+    def __init__(
+        self,
+        theorem: Theorem,
+        *,
+        reverse: bool = False,
+        modulo=None,
+        modulo_max_steps: int = 4096,
+    ) -> None:
         if not isinstance(theorem, Theorem):
             raise TypeError("TheoremDefinition expects a Theorem")
         self._theorem = theorem
         self._reverse = bool(reverse)
+        self._modulo = modulo
+        self._modulo_max_steps = modulo_max_steps
+        self._modulo_cache = None
         direction = "⇐" if self._reverse else "⇒"
         self.name = f"theorem {theorem.name} {direction}: {theorem.statement}"
         src = theorem.rhs if self._reverse else theorem.lhs
@@ -219,7 +235,9 @@ class TheoremDefinition(Definition):
             return False
         if expr == self._source():
             return True
-        return self._matches_sum_subset(expr)
+        if self._matches_sum_subset(expr):
+            return True
+        return self._matches_modulo(expr)
 
     @staticmethod
     def _term_count(expr: Expr) -> int:
@@ -247,9 +265,93 @@ class TheoremDefinition(Definition):
             and _sum_multiset_contains(expr.children, src.children)
         )
 
+
+
+    def _matches_modulo(self, expr: Expr) -> bool:
+        """Phase 6.J — MODULO-NORMALIZATION matching: the candidate
+        Sum matches when ``NF(expr − lhs)`` (normalized by the
+        ``modulo`` engine) has STRICTLY fewer terms than ``expr``
+        (counting the rhs about to be added back). Soundness: the
+        rewrite emits ``NF(expr − lhs) + rhs``, and
+        ``expr = (expr − lhs) + lhs = NF(expr − lhs) + rhs`` — every
+        equality is a registered-rule application plus the cited
+        theorem. Termination: strict term-count decrease. No new
+        mathematical content: this only lets an already-proven
+        instance be RECOGNIZED where normal-form timing hid it."""
+        if self._modulo is None or TheoremDefinition._IN_MODULO:
+            return False
+        src = self._source()
+        if not (isinstance(expr, Sum) and isinstance(src, Sum)):
+            return False
+        if len(expr.children) < 2:
+            return False
+        # Cost gate: modulo matching runs a full normalization per
+        # attempt, so restrict it to STALL-SIZED sums (residual
+        # shapes) — never the giant intermediate sums of a hot
+        # expansion loop (measured: minutes instead of seconds).
+        if len(expr.children) > len(src.children) + 4:
+            return False
+        # Cost gate: modulo matching runs a full normalization, so
+        # attempt it only on STALL-SIZED sums (residual shapes), not
+        # on the giant intermediate sums of a hot expansion loop —
+        # otherwise every engine step pays a normalization per
+        # registered instance (measured: minutes instead of
+        # seconds on D.5).
+        if len(expr.children) > len(src.children) + 4:
+            return False
+        diff_seed = Sum(
+            *expr.children,
+            *(Neg(t) for t in src.children),
+        )
+        TheoremDefinition._IN_MODULO = True
+        try:
+            from jacopy.algorithms.product_rule import product_rule
+            from jacopy.algorithms.simplify import simplify
+
+            cur = diff_seed
+            for _ in range(12):
+                nxt, _steps = self._modulo.expand(
+                    cur, max_steps=self._modulo_max_steps
+                )
+                nxt = product_rule(nxt, None)
+                nxt = simplify(nxt, None)
+                if nxt == cur:
+                    break
+                cur = nxt
+            diff = cur
+        except Exception:
+            return False
+        finally:
+            TheoremDefinition._IN_MODULO = False
+        if (
+            self._term_count(diff)
+            + self._term_count(self._target())
+            >= len(expr.children)
+        ):
+            return False
+        self._modulo_cache = (expr, diff)
+        return True
+
     def rewrite(self, expr: Expr) -> Expr:
         if expr == self._source():
             return self._target()
+        if (
+            self._modulo_cache is not None
+            and self._modulo_cache[0] == expr
+        ):
+            _, diff = self._modulo_cache
+            self._modulo_cache = None
+            target = self._target()
+            parts = []
+            for piece in (diff, target):
+                if piece == Integer(0):
+                    continue
+                parts.extend(
+                    piece.children
+                    if isinstance(piece, Sum)
+                    else [piece]
+                )
+            return Sum.make(*parts)
         remaining = list(expr.children)
         for t in self._source().children:
             remaining.remove(t)

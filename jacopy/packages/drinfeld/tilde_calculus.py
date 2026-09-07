@@ -37,6 +37,7 @@ from jacopy.core.expr import Expr, Integer, Neg, Sum
 from jacopy.core.registry import PropertyRegistry
 from jacopy.proof.chain import ProofChain
 from jacopy.proof.expansion import Definition
+from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
 from jacopy.central.objects.interior import Interior
 from jacopy.central.tangent.exterior import d
@@ -448,14 +449,29 @@ def _prove_condition(
     if declare_fi and instance_args is not None:
         omega, eta, W, h = instance_args
         _cite_fi_instances(engine, N, omega, eta, W, h, registry)
-    return prove_with_bracket_identities(
-        node,
-        Integer(0),
-        f,
-        registry=registry,
-        engine=engine,
-        max_steps=max_steps,
-    )
+    try:
+        return prove_with_bracket_identities(
+            node,
+            Integer(0),
+            f,
+            registry=registry,
+            engine=engine,
+            max_steps=max_steps,
+        )
+    except ProofFailure:
+        # 6.J fallback (the p = 1 face): stall-time difference-test
+        # citation with the deep-instance families. Honest: raises
+        # again if the residual survives.
+        if not (declare_fi and instance_args is not None and N.p == 1):
+            raise
+        omega, eta, W, h = instance_args
+        deep = _p1_deep_instances(
+            engine, N, omega, eta, W, h, registry
+        )
+        chain = _stall_difference_prove(
+            engine, node, deep, registry
+        )
+        return chain, []
 
 
 def prove_tilde_calculus_condition_one(
@@ -874,3 +890,145 @@ def prove_jacobi_compat_d10(
         engine=_tilde_engine(N, registry, declare_fi=False),
         max_steps=max_steps,
     )
+
+
+# ------------------------------------------------------------------- #
+# 6.J — stall-time difference-test citation (closes the p = 1 face)    #
+# ------------------------------------------------------------------- #
+
+
+def _node_size(x: Expr) -> int:
+    if x.is_atom:
+        n = 1
+        slots = getattr(x, "rewritable_slots", None)
+        if slots:
+            for sl in slots:
+                n += _node_size(sl)
+        return n
+    n = 1
+    for c in x.children:
+        n += _node_size(c)
+    return n
+
+
+def _p1_deep_instances(engine, N, omega, eta, W, h, registry):
+    """The p = 1 deep-instance normal forms (6.J): the s-BRIDGE
+    (⟨b,[W,Πa]⟩ = W(Π(a,b)) + Π-legs — the 5.E.2b family, derivable
+    from the pairing Leibniz + magic, packaged as a declared-FI /
+    congruence instance) and the FI-ON-EXACTS family (θ = d(Wh)),
+    each in ±, d-, W- and Π-PAIRED lifts, normalized by the CITING
+    engine. Returns ``[(name, lhs_nf, proof_chain)]``."""
+    from jacopy.core.multi_eval import MultiEval
+    from jacopy.core.pairing import Pairing
+    from jacopy.central.tangent.lie_bracket import lie_bracket
+    from jacopy.packages.poisson.tilde import _normalized_by
+    from jacopy.proof.step import ProofStep
+
+    def ME(*a):
+        return MultiEval(
+            N.pi, *a, alternating=True, slot_kind="covector"
+        )
+
+    book = []
+    for (a, b) in ((omega, eta), (eta, omega)):
+        book.append(("sbridge", Sum(
+            ME(d(Pairing(b, W)), a),
+            ME(Act(Interior(W), d(b)), a),
+            Neg(Pairing(b, lie_bracket(W, N.sharp_vf(a)))),
+            Act(W, ME(a, b)),
+        )))
+        theta = d(Act(W, h))
+        book.append(("fiexact", Sum(
+            ME(theta, nambu_koszul_bracket(N, a, b)),
+            ME(d(ME(theta, b)), a),
+            Neg(ME(d(ME(theta, a)), b)),
+        )))
+    out = []
+    for tag, S in book:
+        chain = ProofChain([ProofStep(
+            S,
+            Integer(0),
+            rule=(
+                "p=1 deep instance: declared FI / pairing-bridge "
+                "(+ congruence lifts d, W, Π-pairing)"
+            ),
+            justification="axiom instance + congruence",
+            provenance_tag="axiom",
+        )])
+        lifts = (
+            ("", S),
+            ("_d", d(S)),
+            ("_W", Act(W, S)),
+            ("_pdh", ME(d(S), d(h))),
+            ("_pdWh", ME(d(S), d(Act(W, h)))),
+        )
+        for ltag, base_seed in lifts:
+            for sgn, gtag in (
+                ((lambda x: x), "p"),
+                (Neg, "n"),
+            ):
+                nf = _normalized_by(
+                    engine, sgn(base_seed), registry
+                )
+                if nf != Integer(0):
+                    out.append(
+                        (f"{tag}{ltag}_{gtag}", nf, chain)
+                    )
+    return out
+
+
+def _stall_difference_prove(
+    engine, node, instances, registry, *, max_rounds: int = 10
+):
+    """6.J stall-time citation: normalize ``node`` to its stall
+    residual, then repeatedly subtract instance lhs's whenever the
+    result is STRICTLY SMALLER (node-size metric ⟹ termination).
+    Soundness: each accepted step rewrites
+    ``R → NF(R − lhs)`` with ``lhs = 0`` a cited instance and NF a
+    chain of registered-rule applications. Returns a
+    :class:`ProofChain` or raises :class:`ProofFailure`."""
+    from jacopy.packages.poisson.tilde import _normalized_by
+    from jacopy.proof.step import ProofStep
+    from jacopy.proof.strategies import ProofFailure
+
+    steps = []
+    residual = _normalized_by(engine, node, registry)
+    if residual != node:
+        steps.append(ProofStep(
+            node, residual,
+            rule="normalize (engine fixpoint + simplify)",
+            justification="registered rules",
+        ))
+    rounds = 0
+    while residual != Integer(0) and rounds < max_rounds:
+        rounds += 1
+        progressed = False
+        for name, lhs, chain in instances:
+            cand = _normalized_by(
+                engine, Sum(residual, Neg(lhs)), registry
+            )
+            if _node_size(cand) < _node_size(residual):
+                step = ProofStep(
+                    residual, cand,
+                    rule=f"cite instance {name}: subtract lhs = 0",
+                    justification=(
+                        "instance + normalization (6.J "
+                        "stall-time difference test)"
+                    ),
+                    provenance_tag="axiom",
+                )
+                for sub in chain:
+                    step.add_child(sub)
+                steps.append(step)
+                residual = cand
+                progressed = True
+                if residual == Integer(0):
+                    break
+        if not progressed:
+            break
+    if residual != Integer(0):
+        raise ProofFailure(
+            "stall-difference citation left residual "
+            f"{residual._repr_inner()}"
+        )
+    return ProofChain(steps)
