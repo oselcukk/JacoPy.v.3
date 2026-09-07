@@ -137,6 +137,35 @@ def _expand_act(
         inner = _expand_act(op, arg.arg, registry)
         return Neg(inner)
     if isinstance(arg, Product):
+        if getattr(op, "leibniz", True) is False:
+            # LINEAR-ONLY operator (e.g. the multivector interior
+            # ι_P for p ≥ 2 — a COMPOSITION of derivations, not a
+            # derivation): scalar factors pull out, no Leibniz
+            # split (6.H.2 soundness catch, 2026-09-07).
+            from jacopy.central.calculus.scalars import (
+                is_scalar_function,
+            )
+
+            scalars = [
+                c
+                for c in arg.children
+                if is_scalar_function(c, registry)
+            ]
+            rest = [
+                c
+                for c in arg.children
+                if not is_scalar_function(c, registry)
+            ]
+            if scalars and rest:
+                core = (
+                    rest[0]
+                    if len(rest) == 1
+                    else Product(*rest)
+                )
+                return Product(
+                    *scalars, _expand_act(op, core, registry)
+                )
+            return Act(op, arg)
         return _expand_leibniz(op, arg, registry)
     from jacopy.core.wedge import Wedge as _Wedge
 

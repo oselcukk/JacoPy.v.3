@@ -1121,3 +1121,86 @@ def prove_m_twist_symmetric_part_form(
         engine=_m_twist_engine(registry),
         max_steps=max_steps,
     )
+
+
+# ------------------------------------------------------------------- #
+# General 2×2 Ψ composition (7.7)-(7.10) — the last 6.E leftover       #
+# ------------------------------------------------------------------- #
+
+
+def compose_twists(apply1, invert1, apply2, invert2):
+    """``Ψ₁ ∘ Ψ₂`` on component pairs: apply = Ψ₁∘Ψ₂, inverse =
+    Ψ₂⁻¹∘Ψ₁⁻¹. With (7.3) this realizes the general 2×2 program:
+    every upper/lower-triangular block product of the three special
+    types is reachable, and
+
+        [·,·]_{Ψ₁Ψ₂} = Ψ₂⁻¹( [Ψ₂ ·, Ψ₂ ·]_{Ψ₁} )
+
+    holds BY CONSTRUCTION (function composition — the sequential-
+    twisting law, structural)."""
+
+    def apply(v, f):
+        return apply1(*apply2(v, f))
+
+    def invert(v, f):
+        return invert2(*invert1(v, f))
+
+    return apply, invert
+
+
+def prove_b_twists_compose_additively(
+    B1: Expr,
+    B2: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    slots,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 60000,
+) -> ProofChain:
+    """(7.7) instance, MECHANICAL: B-transforms compose additively —
+
+        [e₁, e₂]_{Ψ_{B₁} ∘ Ψ_{B₂}} = [e₁, e₂]_{Ψ_{B₁+B₂}}
+
+    (form components; the vector components are untouched by any
+    Ψ_B). Interior linearity in the FORM argument does the work.
+    Declaration-free, evaluated on the given slots."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        InteriorVectorLinearityDefinition,
+        MultiEvalArgLinearityDefinition,
+        OperatorSlotAdditivityDefinition,
+    )
+    from jacopy.central.tangent.engine import tangent_engine
+    from jacopy.central.tangent.lie_bracket import (
+        LieBracketLeibnizDefinition,
+    )
+
+    a1 = lambda v, f: b_twist(B1, v, f)
+    i1 = lambda v, f: b_twist_inverse(B1, v, f)
+    a2 = lambda v, f: b_twist(B2, v, f)
+    i2 = lambda v, f: b_twist_inverse(B2, v, f)
+    ac, ic = compose_twists(a1, i1, a2, i2)
+    _, f_comp = twisted_dorfman(ac, ic, U, omega, V, eta)
+    _, f_sum = twisted_dorfman(
+        lambda v, f: b_twist(Sum(B1, B2), v, f),
+        lambda v, f: b_twist_inverse(Sum(B1, B2), v, f),
+        U, omega, V, eta,
+    )
+    eng = tangent_engine(registry=registry)
+    eng.register(LieBracketLeibnizDefinition(registry))
+    eng.register(MultiEvalArgLinearityDefinition(registry))
+    eng.register(InteriorVectorLinearityDefinition(registry))
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(OperatorSlotAdditivityDefinition())
+    node = _ev(Sum(f_comp, Neg(f_sum)), slots)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=eng,
+        max_steps=max_steps,
+    )

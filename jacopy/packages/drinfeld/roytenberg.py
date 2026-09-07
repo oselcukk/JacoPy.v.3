@@ -542,3 +542,230 @@ def jacobiator_a_obstruction(
         lie_tilde_nambu(N, h_term(H, U, V), W),
         kappa_tilde_nambu(N, h_term(H, U, W), V),
     )
+
+
+# ------------------------------------------------------------------- #
+# Free-ψ master equations (3.12)/(3.15) — the last 6.F.3 leftover      #
+# ------------------------------------------------------------------- #
+#
+# The proto-bialgebroid superfield Θ = μ + γ + φ + ψ needed a FREE
+# trivector ψ (independent of Π) for the (3.12)/(3.15) components —
+# deferred by definition policy until a consumer arrived. The
+# consumer is here: ψ is hosted as an independent ``(2+1)``-vector
+# (a second :func:`nambu_structure` at p = 2), and its R-twist on
+# the p = 1 double is
+#
+#     R_ψ(ω, η) := ψ(ω, η, ·) = ψ♯(ω ∧ η),
+#
+# buildable from the existing sharp + Wedge machinery. Bosonic
+# readings: (3.12) ``½{γ,γ} + {μ,ψ} = 0`` carries the QUASI-POISSON
+# face ``[π♯ω, π♯η] = π♯[ω,η]_π + R_ψ(ω,η)`` (the ψ-twisted FI,
+# opt-in declaration below); (3.15) ``{γ,ψ} = 0`` is the [π,ψ]_SN
+# compatibility (structural node; its full eval theory stays with
+# the SN layer).
+
+
+def r_twist_psi(psi_host, omega: Expr, eta: Expr) -> Expr:
+    """``R_ψ(ω,η) = ψ♯(ω ∧ η)`` — the free-trivector R-twist on
+    1-forms; ``psi_host`` is a p = 2 :func:`nambu_structure` whose
+    ``pi`` is the independent ψ."""
+    from jacopy.core.wedge import Wedge
+
+    return psi_host.sharp_vf(Wedge(omega, eta))
+
+
+class PsiTwistedFIDeclaration(Definition):
+    """DECLARED ψ-twisted fundamental identity (the bosonic (3.12)
+    quasi-Poisson face):
+
+        [π♯ω, π♯η]_Lie → π♯[ω,η]_π + ψ♯(ω ∧ η).
+
+    Opt-in; at ψ = 0 it is the plain FI."""
+
+    anchor = None  # set in __init__
+
+    def __init__(self, P, psi_host) -> None:
+        from jacopy.algebra.lie_bracket_vf import LieBracketVF
+        from jacopy.packages.poisson.core import SharpVF
+
+        self._P = P
+        self._psi = psi_host
+        self._VF = LieBracketVF
+        self._Sharp = SharpVF
+        self.anchor = LieBracketVF
+        self.name = (
+            "declared ψ-twisted FI: [π♯ω,π♯η] = π♯[ω,η]_π + ψ♯(ω∧η)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        if not isinstance(expr, self._VF):
+            return False
+        X, Y = expr.X, expr.Y
+        return (
+            isinstance(X, self._Sharp)
+            and isinstance(Y, self._Sharp)
+            and X.pi == self._P.pi
+            and Y.pi == self._P.pi
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.packages.poisson.koszul import koszul_bracket
+        from jacopy.packages.poisson.core import SharpVF
+
+        om, et = expr.X.alpha, expr.Y.alpha
+        return Sum(
+            SharpVF(self._P.pi, koszul_bracket(self._P, om, et)),
+            r_twist_psi(self._psi, om, et),
+        )
+
+
+def prove_r_twist_psi_properties(
+    psi_host,
+    omega: Expr,
+    eta: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 20000,
+):
+    """R_ψ is ANTISYMMETRIC and C∞-BILINEAR — mechanical (Wedge
+    alternation + sharp tensoriality). Returns the three chains
+    (antisymmetry, first slot, second slot); probe ``h``."""
+    from jacopy.core.expr import Product
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _tilde_engine,
+    )
+
+    eng = _tilde_engine(psi_host, registry, declare_fi=False)
+    chains = []
+    for node in (
+        Act(Sum(r_twist_psi(psi_host, omega, eta),
+                r_twist_psi(psi_host, eta, omega)), h),
+        Act(Sum(
+            r_twist_psi(psi_host, Product(f, omega), eta),
+            Neg(Product(f, r_twist_psi(psi_host, omega, eta))),
+        ), h),
+        Act(Sum(
+            r_twist_psi(psi_host, omega, Product(f, eta)),
+            Neg(Product(f, r_twist_psi(psi_host, omega, eta))),
+        ), h),
+    ):
+        chains.append(ExpandAndSimplify().prove(
+            node, Integer(0), registry=registry,
+            engine=eng, max_steps=max_steps,
+        ))
+    return chains[0], chains[1], chains[2]
+
+
+def prove_psi_twisted_fi_consistency(
+    P,
+    psi_host,
+    omega: Expr,
+    eta: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """Consistency of the bosonic (3.12): under the declared
+    ψ-twisted FI, ``r_twist(ω,η) − R_ψ(ω,η) → 0`` (the Poisson
+    anchor defect IS the free R-twist). Probe ``h``."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.tangent.lie_bracket import lie_bracket
+    from jacopy.packages.poisson.core import SharpVF
+    from jacopy.packages.poisson.koszul import koszul_bracket
+    from jacopy.packages.poisson.showcase import showcase_engine
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        MultiEvalArgLinearityDefinition,
+    )
+
+    eng = showcase_engine(
+        P, registry=registry, declare_poisson=False
+    )
+    eng.register(PsiTwistedFIDeclaration(P, psi_host))
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(MultiEvalArgLinearityDefinition(registry))
+    eng.register(SharpSlotWedgeNormalizeDefinition(registry))
+    from jacopy.packages.poisson.nambu import (
+        NambuSharpLinearityDefinition,
+    )
+
+    eng.register(NambuSharpLinearityDefinition(psi_host, registry))
+    node = Act(Sum(
+        lie_bracket(
+            SharpVF(P.pi, omega), SharpVF(P.pi, eta)
+        ),
+        Neg(SharpVF(P.pi, koszul_bracket(P, omega, eta))),
+        Neg(r_twist_psi(psi_host, omega, eta)),
+    ), h)
+    return ExpandAndSimplify().prove(
+        node, Integer(0), registry=registry,
+        engine=eng, max_steps=max_steps,
+    )
+
+
+def sn_compat_node(P, psi_host) -> Expr:
+    """The (3.15) ``{γ,ψ}`` compatibility carrier: the
+    Schouten-Nijenhuis bracket ``[π, ψ]_SN`` (a 4-vector) —
+    structural; declaring it zero is the quasi-Lie bialgebroid's
+    last condition (its eval theory lives with the SN layer)."""
+    from jacopy.central.tangent.schouten import sn_bracket
+
+    return sn_bracket(P.pi, psi_host.pi)
+
+
+class SharpSlotWedgeNormalizeDefinition(Definition):
+    """Slot-reachable wedge canonicalization for a sharp's form
+    slot (delegates to the ``normalize_alternating`` pass — single
+    source of truth): ``ψ♯(η ∧ ω) → −ψ♯(ω ∧ η)`` etc., so
+    alternation cancellations happen INSIDE sharp slots too."""
+
+    name = "sharp-slot wedge normalization (alternating sort)"
+    anchor = None  # any sharp-like atom with a rewritable slot
+
+    def __init__(self, registry=None) -> None:
+        self._registry = registry
+
+    def _pieces(self, expr: Expr):
+        from jacopy.core.wedge import Wedge
+        from jacopy.packages.poisson.nambu import NambuSharpVF
+
+        if not isinstance(expr, NambuSharpVF):
+            return None
+        slot = expr.omega
+        if not isinstance(slot, Wedge):
+            return None
+        from jacopy.algorithms.normalize_alternating import (
+            _normalize_wedge,
+        )
+
+        norm = _normalize_wedge(slot, self._registry)
+        if norm == slot:
+            return None
+        return norm
+
+    def matches(self, expr: Expr) -> bool:
+        return self._pieces(expr) is not None
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.expr import Product as _Pr
+
+        norm = self._pieces(expr)
+        if norm == Integer(0):
+            return Integer(0)
+        sign = False
+        core = norm
+        if isinstance(core, Neg):
+            sign = True
+            core = core.arg
+        scal = []
+        if isinstance(core, _Pr):
+            scal = list(core.children[:-1])
+            core = core.children[-1]
+        out = expr.with_slots(core)
+        if scal:
+            out = _Pr(*scal, out)
+        return Neg(out) if sign else out

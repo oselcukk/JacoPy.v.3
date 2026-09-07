@@ -204,3 +204,39 @@ class TestMasterEquationDictionary:
                 engine=_tilde_engine(N, reg, declare_fi=False),
                 max_steps=20000,
             )
+
+
+class TestFreePsiMasterEquations:
+    """The last 6.F.3 leftover: the free trivector ψ for the
+    (3.12)/(3.15) master-equation components."""
+
+    def _hosts(self):
+        from jacopy.packages.poisson import poisson_structure
+        from jacopy.packages.poisson.nambu import nambu_structure
+
+        reg = PropertyRegistry()
+        f, h = functions("fp hp", registry=reg)
+        om, et = forms("ωp ηp", degree=1)
+        return reg, f, h, om, et, poisson_structure(), nambu_structure("ψ", p=2)
+
+    def test_r_psi_antisymmetric_and_bilinear(self):
+        reg, f, h, om, et, P, PSI = self._hosts()
+        c1, c2, c3 = ro.prove_r_twist_psi_properties(
+            PSI, om, et, f, h, registry=reg
+        )
+        assert c1.steps and c2.steps and c3.steps
+
+    def test_psi_twisted_fi_consistency(self):
+        """(3.12) quasi-Poisson face: under the declared ψ-twisted
+        FI, the anchor defect IS the free R-twist."""
+        reg, f, h, om, et, P, PSI = self._hosts()
+        chain = ro.prove_psi_twisted_fi_consistency(
+            P, PSI, om, et, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_sn_compat_node_structural(self):
+        """(3.15) carrier [π,ψ]_SN exists as a node."""
+        reg, f, h, om, et, P, PSI = self._hosts()
+        n = ro.sn_compat_node(P, PSI)
+        assert "SN" in n._repr_inner()

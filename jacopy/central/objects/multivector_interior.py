@@ -82,6 +82,12 @@ class MultivectorInterior(Derivation):
         super().__init__(display, degree=Degree.const(0) - k)
         self._multivector = P
 
+    #: NOT a derivation: ι_P for a p-vector is a COMPOSITION of p
+    #: odd derivations — Leibniz-splitting it over products is
+    #: unsound (the engine's graded Leibniz must skip it; scalar
+    #: factors still pull out via C∞-linearity).
+    leibniz = False
+
     @property
     def multivector(self) -> Expr:
         return self._multivector

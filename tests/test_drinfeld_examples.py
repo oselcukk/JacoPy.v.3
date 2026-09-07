@@ -222,3 +222,79 @@ class TestExceptionalDecompositionReadings:
         assert ex.exceptional_h_reading(
             None, om2, None, et2
         ) == Neg(Wedge(et2, d(om2)))
+
+
+class TestBnDecompositionReadings:
+    """6.H leftover closed: the three A ⊕ Z splits of the B_n
+    bracket [(8.17)/(8.21)/(8.26)] — one bracket, three twist
+    readings; the (5.21) symmetric-part laws are the scalar Leibniz
+    rule, mechanical."""
+
+    def test_twist_symmetric_part_is_d_of_metric(self, bn_setup):
+        """Splits 2/3: H(e₁,e₂)+H(e₂,e₁) = d(g_H) — mechanical."""
+        reg, f, g, s, U, V, Y, om, et = bn_setup
+        chain = ex.prove_bn_twist_symmetric_part(
+            f, g, Y, registry=reg
+        )
+        assert chain.steps
+
+    def test_split1_z_symmetric_part(self, bn_setup):
+        reg, f, g, s, U, V, Y, om, et = bn_setup
+        chain = ex.prove_bn_split1_z_symmetric_part(
+            f, om, g, et, Y, registry=reg
+        )
+        assert chain.steps
+
+    def test_structural_identifications(self, bn_setup):
+        """(8.21)/(8.26): the split calculus elements are the
+        expected projections."""
+        from jacopy.algebra.derivation import Act
+
+        reg, f, g, s, U, V, Y, om, et = bn_setup
+        Lv, iv = ex.bn_split2_calculus(U, f, et)
+        assert Lv == ex._L(U, et) and iv == ex._iota(U, et)
+        assert ex.bn_split3_anchor_action(U, om, f) == Act(U, f)
+
+    def test_same_bracket_three_readings(self, bn_setup):
+        """Decomposition-dependence regression: the shared twist
+        kernel g·df appears verbatim as split-1's Z-bracket, and as
+        the H/R twists of splits 2/3."""
+        reg, f, g, s, U, V, Y, om, et = bn_setup
+        k = ex.bn_scalar_twist(f, g)
+        assert ex.bn_split1_z_bracket(f, om, g, et) == k
+        # and it is literally the form-component tail of bn_bracket:
+        _, _, form = ex.bn_bracket(U, f, om, V, g, et)
+        assert k in form.children
+
+
+class TestExceptionalBoxtimesTwist:
+    """The full exceptional Ψ_Π with Π = (Π₃, Π₆ + Π₃⊛Π₃) [E6
+    (4.10)-(4.14)] — the user scenario's part 2, complete."""
+
+    def _hosts(self):
+        reg = PropertyRegistry()
+        f, h = functions("fx hx", registry=reg)
+        (U,) = vector_fields("Ux")
+        (om2,) = forms("Ωx2", degree=2)
+        (om5,) = forms("Ωx5", degree=5)
+        return (reg, f, h, U, om2, om5,
+                nambu_structure("Π3", p=2),
+                nambu_structure("Π6", p=5))
+
+    def test_twist_is_c_infinity_linear(self):
+        """Ψ_Π(f·e) = f·Ψ_Π(e) incl. the ⊛ leg — closed only after
+        the leibniz=False soundness fix (ι_P is a COMPOSITION of
+        derivations, not a derivation; the engine caught the
+        unsound Leibniz split)."""
+        reg, f, h, U, om2, om5, N3, N6 = self._hosts()
+        chain = ex.prove_exceptional_twist_linear(
+            N3, N6, U, om2, om5, f, h, registry=reg
+        )
+        assert chain.steps
+
+    def test_inverse_law(self):
+        reg, f, h, U, om2, om5, N3, N6 = self._hosts()
+        chain = ex.prove_exceptional_twist_inverse(
+            N3, N6, U, om2, om5, h, registry=reg
+        )
+        assert chain.steps

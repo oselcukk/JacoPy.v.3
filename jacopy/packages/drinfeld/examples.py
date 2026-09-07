@@ -525,3 +525,238 @@ def prove_exceptional_h_first_entry_symbol(
         engine=_tilde_engine(N, registry, declare_fi=False),
         max_steps=max_steps,
     )
+
+
+# ------------------------------------------------------------------- #
+# B_n decomposition readings (8.17)/(8.21)/(8.26) — 6.H leftovers      #
+# ------------------------------------------------------------------- #
+#
+# The SAME B_n bracket under three A ⊕ Z splits [§8.4]: the calculus
+# elements/twists it induces per split, with the (5.21) symmetric-
+# part decompositions as MECHANICAL theorems:
+#
+#   split 1  (A = TM, Z = C∞ ⊕ T*M): twistless — metric-Bourbaki
+#            bialgebroid; ℒ_U(g+η) = U(g) + ℒ_Uη, ι_V(f+ω) = ι_Vω;
+#            Z-bracket [f+ω, g+η]_Z = g·df with g_Z = f·g, 𝔻_Z = d.
+#   split 2  (A = TM ⊕ C∞, Z = T*M): H-twist H(U+f, V+g) = g·df,
+#            g_H = g·f, d_H = d — quasi metric-Bourbaki.
+#   split 3  (A = TM ⊕ T*M — the Dorfman side, Z = C∞): R-twist
+#            R(f,g) = g·df, g_R = f·g, d_R = d — tilde-quasi.
+#
+# The decomposition-dependence regression: one bracket, three twist
+# readings; the (5.21) laws H(U,V) + H(V,U) = d_H g_H(U,V) and
+# R(f,g) + R(g,f) = d_R g_R(f,g) close mechanically (they are the
+# same scalar Leibniz fact g·df + f·dg = d(f·g)).
+
+
+def bn_scalar_twist(f: Expr, g: Expr) -> Expr:
+    """``g·df`` — the shared twist kernel of splits 2 and 3
+    [(8.22)/(8.28)]."""
+    return Product(g, d(f))
+
+
+def prove_bn_twist_symmetric_part(
+    f: Expr,
+    g: Expr,
+    Y: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 10000,
+) -> ProofChain:
+    """(5.21) for splits 2 and 3 at once:
+    ``H(e₁,e₂) + H(e₂,e₁) = d(g·f)`` — i.e. ``g·df + f·dg = d(fg)``,
+    the scalar Leibniz rule as the twist's symmetric-part law.
+    Declaration-free, probe ``Y``."""
+    from jacopy.core.pairing import Pairing
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    node = Pairing(
+        Sum(
+            bn_scalar_twist(f, g),
+            bn_scalar_twist(g, f),
+            Neg(d(Product(f, g))),
+        ),
+        Y,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_bn_engine(registry),
+        max_steps=max_steps,
+    )
+
+
+def bn_split1_z_bracket(
+    f: Expr, omega: Expr, g: Expr, eta: Expr
+) -> Expr:
+    """Split 1's Z-bracket [(8.18)]: ``[f+ω, g+η]_Z = g·df`` (the
+    form part; the scalar part vanishes)."""
+    return bn_scalar_twist(f, g)
+
+
+def prove_bn_split1_z_symmetric_part(
+    f: Expr,
+    omega: Expr,
+    g: Expr,
+    eta: Expr,
+    Y: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 10000,
+) -> ProofChain:
+    """(8.19): the split-1 Z-bracket's symmetric part decomposes
+    with ``g_Z(f+ω, g+η) = f·g`` and ``𝔻_Z = d`` — mechanically the
+    same scalar Leibniz law."""
+    from jacopy.core.pairing import Pairing
+    from jacopy.proof.strategies import ExpandAndSimplify
+
+    node = Pairing(
+        Sum(
+            bn_split1_z_bracket(f, omega, g, eta),
+            bn_split1_z_bracket(g, eta, f, omega),
+            Neg(d(Product(f, g))),
+        ),
+        Y,
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=_bn_engine(registry),
+        max_steps=max_steps,
+    )
+
+
+def bn_split2_calculus(U: Expr, f: Expr, eta: Expr):
+    """Split 2's calculus elements [(8.21)]: sections of
+    ``A = TM ⊕ C∞`` act through their VECTOR part only —
+    ``ℒ_{U+f}η = ℒ_Uη``, ``ι_{U+f}η = ι_Uη`` (structural
+    identifications, returned as the pair)."""
+    return _L(U, eta), _iota(U, eta)
+
+
+def bn_split3_anchor_action(
+    U: Expr, omega: Expr, f: Expr
+) -> Expr:
+    """Split 3's calculus [(8.26)]: the Dorfman side acts on the
+    ``C∞`` part through the anchor only — ``ℒ̂_{U+ω}f = U(f)``,
+    ``ι ≡ 0`` (structural)."""
+    return Act(U, f)
+
+
+# ------------------------------------------------------------------- #
+# Full exceptional Ψ_Π twist with ⊛ (E6 eqs 4.10-4.14)                 #
+# ------------------------------------------------------------------- #
+
+
+def exceptional_pi_twist(N3, N6, U, om2, om5):
+    """The exceptional twist [E6 eq (4.10)-(4.12)] on triple
+    sections: ``Ψ_Π(U ⊕ ω₂ ⊕ ω₅) = (U + Π₃ω₂ + (Π₆ + Π₃⊛Π₃)ω₅)
+    ⊕ ω₂ ⊕ ω₅`` — buildable since 6.H.2 (partial contraction +
+    boxtimes). ``N3``/``N6`` host the trivector/hexavector."""
+    return (
+        Sum(
+            U,
+            N3.sharp_vf(om2),
+            N6.sharp_vf(om5),
+            boxtimes(N3, om5),
+        ),
+        om2,
+        om5,
+    )
+
+
+def exceptional_pi_twist_inverse(N3, N6, U, om2, om5):
+    """``Ψ_Π⁻¹`` [eq (4.11)]: minus the same Π-block."""
+    return (
+        Sum(
+            U,
+            Neg(N3.sharp_vf(om2)),
+            Neg(N6.sharp_vf(om5)),
+            Neg(boxtimes(N3, om5)),
+        ),
+        om2,
+        om5,
+    )
+
+
+def prove_exceptional_twist_linear(
+    N3,
+    N6,
+    U: Expr,
+    om2: Expr,
+    om5: Expr,
+    f: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 30000,
+) -> ProofChain:
+    """``Ψ_Π(f·e) = f·Ψ_Π(e)`` (vector component; the form
+    components are trivially scaled) — C∞-linearity of the
+    exceptional twist block, including the ⊛ leg (multivector-
+    interior tensoriality + sharp linearity). Probe ``h``."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        MultiEvalArgLinearityDefinition,
+    )
+    from jacopy.central.objects.multivector_interior import (
+        MultivectorInteriorLinearityDefinition,
+    )
+    from jacopy.packages.poisson.nambu import (
+        NambuSharpLinearityDefinition,
+    )
+    from jacopy.central.tangent.engine import tangent_engine
+
+    vec_s, _, _ = exceptional_pi_twist(
+        N3, N6, Product(f, U), Product(f, om2), Product(f, om5)
+    )
+    vec_b, _, _ = exceptional_pi_twist(N3, N6, U, om2, om5)
+    eng = tangent_engine(registry=registry)
+    eng.register(NambuSharpLinearityDefinition(N3, registry))
+    eng.register(NambuSharpLinearityDefinition(N6, registry))
+    eng.register(
+        MultivectorInteriorLinearityDefinition(registry)
+    )
+    eng.register(ActExpansionDefinition(registry))
+    eng.register(MultiEvalArgLinearityDefinition(registry))
+    node = Act(
+        Sum(vec_s, Neg(Product(f, vec_b))), h
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=eng,
+        max_steps=max_steps,
+    )
+
+
+def prove_exceptional_twist_inverse(
+    N3,
+    N6,
+    U: Expr,
+    om2: Expr,
+    om5: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 20000,
+) -> ProofChain:
+    """``Ψ_Π⁻¹ ∘ Ψ_Π = id`` on the vector component (the Π-blocks
+    cancel; forms are untouched). Probe ``h``."""
+    from jacopy.proof.strategies import ExpandAndSimplify
+    from jacopy.central.tangent.engine import tangent_engine
+
+    v1, f2, f5 = exceptional_pi_twist(N3, N6, U, om2, om5)
+    v2, _, _ = exceptional_pi_twist_inverse(N3, N6, v1, f2, f5)
+    node = Act(Sum(v2, Neg(U)), h)
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
+        registry=registry,
+        engine=tangent_engine(registry=registry),
+        max_steps=max_steps,
+    )

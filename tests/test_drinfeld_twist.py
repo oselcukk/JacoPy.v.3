@@ -295,3 +295,41 @@ class TestEndomorphismLaws:
         assert rule.rewrite(n2) == Sum(
             EndoVF("m", U), EndoVF("m", V)
         )
+
+
+class TestGeneralTwistComposition:
+    """The last 6.E leftover: the general 2×2 Ψ program via
+    composition (7.7)-(7.10)."""
+
+    def test_sequential_law_structural(self):
+        """[·]_{Ψ₁Ψ₂} = Ψ₂⁻¹([Ψ₂·, Ψ₂·]_{Ψ₁}) — by construction."""
+        from jacopy.packages.drinfeld.twist import (
+            b_twist, b_twist_inverse, compose_twists,
+            pi_twist, pi_twist_inverse, twisted_dorfman,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(1)
+        a1 = lambda v, f: pi_twist(N, v, f)
+        i1 = lambda v, f: pi_twist_inverse(N, v, f)
+        a2 = lambda v, f: b_twist(B, v, f)
+        i2 = lambda v, f: b_twist_inverse(B, v, f)
+        ac, ic = compose_twists(a1, i1, a2, i2)
+        lhs = twisted_dorfman(ac, ic, U, om, V, et)
+        u2, o2 = a2(U, om)
+        v2, e2 = a2(V, et)
+        rhs = i2(*twisted_dorfman(a1, i1, u2, o2, v2, e2))
+        assert lhs == rhs
+
+    @pytest.mark.parametrize("p", [1, 2])
+    def test_b_twists_compose_additively(self, p):
+        """Ψ_{B₁}∘Ψ_{B₂} = Ψ_{B₁+B₂} — mechanical (7.7 instance)."""
+        from jacopy.packages.drinfeld.twist import (
+            prove_b_twists_compose_additively,
+        )
+
+        reg, h, U, V, om, et, B, slots, N = _setup(p)
+        (B2,) = forms("B2t", degree=p + 1)
+        chain = prove_b_twists_compose_additively(
+            B, B2, U, om, V, et, slots, registry=reg
+        )
+        assert chain.steps
