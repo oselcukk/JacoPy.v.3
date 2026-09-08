@@ -7,17 +7,21 @@ Given a graded bracket ``[·, ·]`` on a graded module and a generator
     {a, b}_Q := [[a, Q], b]
 
 which is automatically a graded Leibniz bracket regardless of any
-conditions on ``Q``. The derived bracket is *graded antisymmetric* and
-satisfies the graded Jacobi identity **if and only if** the
-compatibility condition
+conditions on ``Q``. Over a graded LIE base with an ODD (shifted)
+generator, the condition
 
     [Q, Q] = 0
 
-holds in the base bracket. This conditionality is the whole point of
-the construction, structures like Poisson, Courant, and Koszul
-brackets arise as derived brackets of a Schouten-type base bracket,
-and each of their Jacobi identities reduces to a single equation on
-the generator ``Q``.
+makes the derived bracket a LODAY (left-Leibniz-Jacobi) bracket
+[Kosmann-Schwarzbach 1996]. It is NOT automatically graded
+antisymmetric, and the cyclic Lie-form Jacobi holds only where the
+bracket is additionally skew (e.g. on suitable abelian subalgebras)
+— the proof layer's :class:`DerivedBracketStrategy` checks exactly
+these preconditions before certifying anything (2026-09-08 audit).
+This conditionality is the point of the construction: Poisson,
+Courant, and Koszul brackets arise as derived brackets of a
+Schouten-type base, each Jacobi reducing to one equation on ``Q``
+*on the slots where the extra hypotheses hold*.
 
 The :class:`DerivedBracket` class captures this construction at the
 algorithmic level:
@@ -25,11 +29,13 @@ algorithmic level:
 * :meth:`expand` produces ``[[a, Q], b]`` using the base bracket's own
   :meth:`~jacopy.brackets.base.GradedBracket.expand` on each layer.
 * :meth:`jacobi_obstruction` returns ``[Q, Q]_base``, the Expr whose
-  vanishing is equivalent to the derived bracket satisfying Jacobi.
+  vanishing is the remaining hypothesis for the derived bracket's
+  Jacobi under the theorem's preconditions.
 * :func:`derived_bracket` is a light factory helper.
 
-The *Derived Bracket Theorem* itself, that Jacobi holds ⟺ the
-obstruction vanishes, is registered as a package-level theorem in
+The *Derived Bracket Theorem* itself — Loday Jacobi from a
+vanishing obstruction under the stated preconditions — is registered
+as a package-level theorem in
 Faz 9 and consulted from the proof layer. This module only provides
 the object; the theorem lives elsewhere so that each new
 ``DerivedBracket`` instance automatically inherits the result rather
@@ -59,10 +65,11 @@ class VanishingCondition:
     A :class:`VanishingCondition` is the typed handle the proof layer
     consumes when a construction's correctness rests on a single
     equation. :meth:`DerivedBracket.jacobi_condition` returns one whose
-    :attr:`obstruction` is ``[Q, Q]_base``: the Derived Bracket Theorem
-    says Jacobi on ``{·, ·}_Q`` holds iff this vanishes, so passing the
-    condition around is the same as passing around the theorem's
-    hypothesis.
+    :attr:`obstruction` is ``[Q, Q]_base``: under the Derived Bracket
+    Theorem's preconditions (graded-Lie base, odd shifted generator —
+    plus per-slot skewness for the cyclic Lie form) its vanishing is
+    the remaining hypothesis for Jacobi on ``{·, ·}_Q``, so passing
+    the condition around is passing that hypothesis.
 
     The class is intentionally minimal, it is data, not a proof
     tactic. :meth:`holds` runs :func:`simplify` against the
@@ -97,8 +104,9 @@ class DerivedBracket(GradedBracket):
         The generator, an :class:`Expr` of degree ``degree_Q``.
     degree_Q
         Explicit generator degree. Defaults to ``0`` when unspecified.
-        The derived bracket's own degree is ``degree_Q − 2`` per the
-        derived-bracket degree formula.
+        The derived bracket's own degree is ``degree_Q + 2·|base|``
+        per the derived-bracket degree formula (each base layer
+        contributes its degree).
     name
         Optional display name. Defaults to a structured tag derived
         from the base bracket and generator.
@@ -148,15 +156,19 @@ class DerivedBracket(GradedBracket):
         self._d_override = d
         self._lie_derivative_override = lie_derivative
         display = name or f"{{·,·}}_{Q._repr_inner()}"
-        # Derived-bracket degree formula: |{·,·}_Q| = |Q| - 2. Graded
-        # Leibniz always holds; antisymmetry and Jacobi are conditional
-        # on [Q, Q]_base = 0. We surface that by reporting Jacobi as
-        # None ("conditional") rather than True or False, the proof
-        # layer is the one that discharges it against the obstruction.
+        # Derived-bracket degree formula: |[[a,Q],b]| = |a| + |b| +
+        # |Q| + 2·|base| — each base-bracket layer contributes its own
+        # degree (2026-09-07 audit, finding 2: the previous
+        # ``|Q| − 2`` hard-coded the Schouten-type base |base| = −1).
+        # Graded Leibniz always holds; antisymmetry is NOT automatic
+        # (a derived bracket is Loday, skew only on suitable slots —
+        # 2026-09-08 re-audit, finding 2) and Jacobi is conditional
+        # on [Q, Q]_base = 0 + the theorem's preconditions, checked
+        # by the proof layer. Both surfaced as non-claims here.
         super().__init__(
             display,
-            degree=self._degree_Q + Degree.const(-2),
-            is_graded_antisymmetric=True,
+            degree=self._degree_Q + base.degree + base.degree,
+            is_graded_antisymmetric=False,
             satisfies_leibniz=True,
             satisfies_graded_jacobi=None,
         )
@@ -213,24 +225,28 @@ class DerivedBracket(GradedBracket):
         imports are deferred to avoid a top-level cycle between
         ``brackets`` and ``calculus``.
         """
-        from jacopy.calculus.exterior_d import d as default_d
-        from jacopy.calculus.lie_derivative import (
-            lie_derivative as default_lie_derivative,
-        )
-        from jacopy.calculus.pairing import pairing
+        # v3 Cartan layer (the pre-reorg ``jacopy.calculus.*`` paths
+        # died in the v3 reorg; 2026-09-07 audit, finding 7).
+        from jacopy.central.tangent.exterior import CARTAN_TM, d as d_fn
+        from jacopy.core.pairing import Pairing
 
-        d_op = self._d_override if self._d_override is not None else default_d
         lie_factory = (
             self._lie_derivative_override
             if self._lie_derivative_override is not None
-            else default_lie_derivative
+            else CARTAN_TM.lie
         )
         rho_a = Act(self._acting_on, a)
         rho_b = Act(self._acting_on, b)
+        paired = Pairing(b, rho_a)
+        d_term = (
+            Act(self._d_override, paired)
+            if self._d_override is not None
+            else d_fn(paired)
+        )
         return Sum(
             Act(lie_factory(rho_a), b),
             Neg(Act(lie_factory(rho_b), a)),
-            Neg(Act(d_op, pairing(rho_a, b))),
+            Neg(d_term),
         )
 
     def expand_definition(
@@ -255,11 +271,13 @@ class DerivedBracket(GradedBracket):
         self, registry: Optional[PropertyRegistry] = None
     ) -> Expr:
         """Return ``[Q, Q]_base``, the expression whose vanishing is
-        equivalent to the derived bracket satisfying graded Jacobi.
+        the remaining hypothesis for the derived bracket's Jacobi.
 
-        This is the *universal* obstruction: the Derived Bracket Theorem
-        says that for any derived bracket, Jacobi on ``{·, ·}_Q`` holds
-        on all operands ⟺ this single expression vanishes.
+        Under the Derived Bracket Theorem's PRECONDITIONS (graded-Lie
+        base, odd shifted generator — and per-slot skewness for the
+        cyclic Lie form, checked by the proof layer) the vanishing of
+        this single expression yields Jacobi; without them it claims
+        nothing (2026-09-08 audits).
         """
         return self._base.expand(self._Q, self._Q, registry)
 

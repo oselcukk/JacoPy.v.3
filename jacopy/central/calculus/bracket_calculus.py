@@ -258,14 +258,29 @@ def _slot_ok(
         return True
 
 
-def _evaluate(omega: Expr, args: Tuple[Expr, ...]) -> Expr:
+def _evaluate(
+    omega: Expr,
+    args: Tuple[Expr, ...],
+    *,
+    alternating: bool = True,
+    slot_kind: str = "vector",
+) -> Expr:
     """``ω(args)`` in node form: 0 args → ``ω`` itself, 1 arg → the
-    canonical pairing, ≥2 args → an alternating MultiEval."""
+    canonical pairing, ≥2 args → a MultiEval INHERITING the source
+    node's ``alternating``/``slot_kind``.
+
+    The flags must always be forwarded from the MultiEval being
+    unrolled — hard-coding ``alternating=True`` silently turned a
+    general covariant tensor into an alternating one, "proving"
+    ``(L_X T)(Y,Y) = 0`` for non-alternating ``T`` (2026-09-08
+    audit, compliance finding 1)."""
     if not args:
         return omega
     if len(args) == 1:
         return Pairing(omega, args[0])
-    return MultiEval(omega, *args, alternating=True, slot_kind="vector")
+    return MultiEval(
+        omega, *args, alternating=alternating, slot_kind=slot_kind
+    )
 
 
 class IntrinsicDDefinition(Definition):
@@ -348,7 +363,12 @@ class IntrinsicDDefinition(Definition):
         terms = []
         for i, Xi in enumerate(args):
             rest = args[:i] + args[i + 1:]
-            inner = _evaluate(omega, rest)
+            inner = _evaluate(
+                omega,
+                rest,
+                alternating=expr.alternating,
+                slot_kind=expr.slot_kind,
+            )
             term: Expr = Act(self._calc.anchor(Xi), inner)
             terms.append(Neg(term) if i % 2 else term)
         for i in range(len(args)):
@@ -357,7 +377,12 @@ class IntrinsicDDefinition(Definition):
                 rest = tuple(
                     a for idx, a in enumerate(args) if idx not in (i, j)
                 )
-                inner = _evaluate(omega, (br,) + rest)
+                inner = _evaluate(
+                    omega,
+                    (br,) + rest,
+                    alternating=expr.alternating,
+                    slot_kind=expr.slot_kind,
+                )
                 terms.append(Neg(inner) if (i + j) % 2 else inner)
         return Sum(*terms)
 
@@ -462,12 +487,31 @@ class IntrinsicLDefinition(Definition):
         X = expr.head.op.vector
         omega = expr.head.arg
         args = expr.args
-        terms = [Act(self._calc.anchor(X), _evaluate(omega, args))]
+        terms = [
+            Act(
+                self._calc.anchor(X),
+                _evaluate(
+                    omega,
+                    args,
+                    alternating=expr.alternating,
+                    slot_kind=expr.slot_kind,
+                ),
+            )
+        ]
         for i in range(len(args)):
             replaced = (
                 args[:i] + (self._calc.bracket(X, args[i]),) + args[i + 1:]
             )
-            terms.append(Neg(_evaluate(omega, replaced)))
+            terms.append(
+                Neg(
+                    _evaluate(
+                        omega,
+                        replaced,
+                        alternating=expr.alternating,
+                        slot_kind=expr.slot_kind,
+                    )
+                )
+            )
         return Sum(*terms)
 
 

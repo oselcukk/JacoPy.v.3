@@ -248,14 +248,25 @@ class GradedBracket(ABC):
         b: Expr,
         registry: Optional[PropertyRegistry] = None,
     ) -> Expr:
-        """``[a, b] + (−1)^{|a||b|} [b, a]``.
+        """``[a, b] + (−1)^{(|a|+k)(|b|+k)} [b, a]`` for a degree-``k``
+        bracket.
 
-        Claims to be zero iff the bracket is graded-antisymmetric on the
-        pair ``(a, b)``. The sign parity is computed from the declared
-        degrees of ``a`` and ``b``; undecidable parity raises
-        :class:`ValueError` so the caller can narrow the degrees.
+        Claims to be zero exactly when the bracket is
+        graded-antisymmetric on the pair ``(a, b)``. The Koszul sign
+        uses the degrees SHIFTED by the bracket's own degree — the
+        convention in which a degree-``k`` bracket is a graded Lie
+        bracket on the ``k``-shifted module. For ``k = 0`` this is the
+        plain ``|a||b|`` sign; using unshifted degrees for ``k ≠ 0``
+        built the WRONG obstruction (2026-09-08 second re-audit: six
+        unshifted skew checks passed while the unshifted cyclic
+        expression evaluated to ``2E₂₁ ≠ 0``). Undecidable parity
+        raises :class:`ValueError` so the caller can narrow degrees.
         """
-        parity = (degree_of(a, registry) * degree_of(b, registry)).parity()
+        k = self._degree
+        parity = (
+            (degree_of(a, registry) + k)
+            * (degree_of(b, registry) + k)
+        ).parity()
         if parity is None:
             raise ValueError(
                 f"antisymmetry obstruction parity is symbolic for "
@@ -274,20 +285,23 @@ class GradedBracket(ABC):
         c: Expr,
         registry: Optional[PropertyRegistry] = None,
     ) -> Expr:
-        """Cyclic Jacobi with Koszul signs.
+        """Cyclic Jacobi with Koszul signs, SHIFTED by the bracket's
+        own degree ``k``:
 
-        Returns
+            (−1)^{(|a|+k)(|c|+k)} [a, [b, c]]
+          + (−1)^{(|b|+k)(|a|+k)} [b, [c, a]]
+          + (−1)^{(|c|+k)(|b|+k)} [c, [a, b]]
 
-            (−1)^{|a||c|} [a, [b, c]]
-          + (−1)^{|b||a|} [b, [c, a]]
-          + (−1)^{|c||b|} [c, [a, b]]
-
-        which the graded Jacobi identity claims is zero. Undecidable
-        parity raises :class:`ValueError`.
+        — the graded Jacobi identity of a degree-``k`` bracket in the
+        ``k``-shifted convention (identical to the plain signs for
+        ``k = 0``; unshifted signs for ``k ≠ 0`` produced a non-zero
+        "identity" — 2026-09-08 second re-audit). Undecidable parity
+        raises :class:`ValueError`.
         """
-        deg_a = degree_of(a, registry)
-        deg_b = degree_of(b, registry)
-        deg_c = degree_of(c, registry)
+        k = self._degree
+        deg_a = degree_of(a, registry) + k
+        deg_b = degree_of(b, registry) + k
+        deg_c = degree_of(c, registry) + k
         terms = []
         for x, y, z, p in (
             (a, b, c, (deg_a * deg_c).parity()),

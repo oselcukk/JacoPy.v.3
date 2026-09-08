@@ -262,6 +262,54 @@ def _operator_degree(op: Expr, registry: Optional[PropertyRegistry]) -> Degree:
     return degree_of(op, registry)
 
 
+def _is_derivation_expr(
+    expr: Expr, registry: Optional[PropertyRegistry]
+) -> bool:
+    """Conservative certificate that ``expr`` is a DERIVATION:
+
+    * a :class:`~jacopy.algebra.derivation.Derivation` atom (the type
+      contract of the operator layer) that does NOT carry the
+      ``leibniz = False`` marker — operators like the multivector
+      interior ``ι_P`` subclass ``Derivation`` for slot plumbing but
+      are COMPOSITIONS of derivations, and declare so via that
+      contract (2026-09-08 re-audit, finding 3),
+    * a :class:`Sum`/:class:`Neg` of certified derivations (module
+      structure),
+    * a :class:`Product` of scalar factors with EXACTLY ONE certified
+      derivation (``f·D`` is again a derivation).
+
+    A Product with two or more derivation factors is a COMPOSITION —
+    not a derivation — and is rejected; so is anything unrecognized
+    (soundness over completeness)."""
+    from jacopy.core.expr import Product, Rational
+    from jacopy.core.properties import Scalar
+    from jacopy.algebra.derivation import Derivation
+
+    if isinstance(expr, Derivation):
+        return getattr(expr, "leibniz", True) is not False
+    if isinstance(expr, Neg):
+        return _is_derivation_expr(expr.arg, registry)
+    if isinstance(expr, Sum):
+        return all(
+            _is_derivation_expr(c, registry)
+            for c in expr.children
+        )
+    if isinstance(expr, Product):
+        derivations = 0
+        for c in expr.children:
+            if isinstance(c, (Integer, Rational)) or (
+                registry is not None
+                and registry.has(c, Scalar)
+            ):
+                continue
+            if _is_derivation_expr(c, registry):
+                derivations += 1
+            else:
+                return False
+        return derivations == 1
+    return False
+
+
 class AgreementOnGenerators(Strategy):
     """Operator equality from agreement on algebra generators.
 
@@ -287,6 +335,12 @@ class AgreementOnGenerators(Strategy):
     """
 
     name = "AgreementOnGenerators"
+
+    @staticmethod
+    def _certify_derivation(
+        expr: Expr, registry: Optional[PropertyRegistry]
+    ) -> bool:
+        return _is_derivation_expr(expr, registry)
 
     def __init__(
         self,
@@ -317,6 +371,26 @@ class AgreementOnGenerators(Strategy):
         # degree.
         lhs_is_zero = lhs == Integer(0)
         rhs_is_zero = rhs == Integer(0)
+        # SOUNDNESS GUARD (2026-09-07 audit, finding 4): agreement on
+        # generators determines an operator on the whole algebra ONLY
+        # for derivations (first-order Leibniz operators). A
+        # composition like D∘D has the degree of a derivation but is
+        # NOT one — D²(x) = 0 on the generator x of ℝ[x] while
+        # D²(x·x) = 2 for D(x) = 1. Refuse anything not certified as
+        # a derivation expression.
+        for side, is_zero, label in (
+            (lhs, lhs_is_zero, "lhs"),
+            (rhs, rhs_is_zero, "rhs"),
+        ):
+            if not is_zero and not _is_derivation_expr(side, registry):
+                raise ProofFailure(
+                    "AgreementOnGenerators applies to DERIVATIONS "
+                    f"only; {label} = {side!r} is not certified as "
+                    "one (compositions of derivations are not "
+                    "derivations — prove the identity on the whole "
+                    "algebra instead, or supply a derivation-"
+                    "certified form)"
+                )
         try:
             deg_lhs = (
                 _operator_degree(lhs, registry) if not lhs_is_zero else None
@@ -443,21 +517,20 @@ class UnrollToFoundations(Strategy):
 class DerivedBracketStrategy:
     """Apply the Derived Bracket Theorem to discharge Jacobi.
 
-    The theorem states that for any
-    :class:`~jacopy.brackets.derived.DerivedBracket` ``{·, ·}_Q`` built
-    over a base bracket ``[·, ·]``, the graded Jacobi identity on
-    ``{·, ·}_Q`` holds *for all operands* if and only if the single
-    equation
-
-        [Q, Q]_base = 0
-
-    holds. :meth:`prove_jacobi` uses that result to replace a triple
-    cyclic Jacobi check by a universal obstruction: one reduction step
-    tagged as a theorem, one expansion of the base bracket on
-    ``(Q, Q)``, and a final simplification. If the obstruction
-    collapses to :class:`Integer` ``0`` the proof closes, Jacobi holds
-    on every triple, not just the one supplied. Otherwise the residue
-    is carried in a :class:`ProofFailure`.
+    The theorem [Kosmann-Schwarzbach 1996]: over a graded LIE base
+    with an ODD shifted generator, ``[Q, Q]_base = 0`` makes the
+    derived bracket ``{a, b}_Q = [[a, Q], b]`` a LODAY
+    (left-Leibniz-Jacobi) bracket. The CYCLIC Lie-form Jacobi that
+    :meth:`prove_jacobi` certifies additionally requires genuine
+    skewness on every slot the supplied triple exercises — checked
+    per-triple, in the derived bracket's own degree-shifted sign
+    convention. The conclusion is therefore for THIS triple under
+    the verified hypotheses, not a universal ``⟺`` (2026-09-08
+    audits): :meth:`prove_jacobi` verifies the preconditions, cites
+    the theorem to reduce the cyclic check to the obstruction
+    ``[Q, Q]_base``, expands and simplifies. If the obstruction
+    collapses to :class:`Integer` ``0`` the proof closes; otherwise
+    the residue is carried in a :class:`ProofFailure`.
 
     The strategy isn't a :class:`Strategy` subclass: ``Strategy.prove``
     is a binary interface (``lhs == rhs``), but this tactic is
@@ -482,6 +555,106 @@ class DerivedBracketStrategy:
                 "DerivedBracketStrategy requires a DerivedBracket"
             )
 
+        # MATHEMATICAL PRECONDITIONS of the Derived Bracket Theorem
+        # (2026-09-07 audit, finding 2 — ``[Q,Q] = 0`` alone proves
+        # nothing):
+        #
+        # 1. the BASE bracket must be a graded LIE bracket (graded
+        #    antisymmetry + graded Jacobi actually asserted);
+        # 2. the generator must be ODD in the shifted grading:
+        #    parity(|Q| + |base|) = 1. For an even shifted generator
+        #    ``[Q, Q] = 0`` is vacuous (e.g. any commutator with
+        #    |Q| = |base| = 0) and controls no identity — the matrix
+        #    counterexample Q = A = E₁₁ has [Q,Q] = 0 with a
+        #    non-vanishing Jacobiator.
+        #
+        # Undecidable parity is refused too: soundness over
+        # completeness.
+        base = bracket.base
+        if (
+            base.satisfies_graded_jacobi is not True
+            or not base.is_graded_antisymmetric
+        ):
+            raise ProofFailure(
+                "DerivedBracketStrategy: the base bracket "
+                f"{base.name!r} is not asserted to be a graded Lie "
+                "bracket (graded antisymmetry + graded Jacobi) — "
+                "the Derived Bracket Theorem does not apply"
+            )
+        shifted = bracket.degree_Q + base.degree
+        parity = shifted.parity()
+        if parity != 1:
+            raise ProofFailure(
+                "DerivedBracketStrategy: the generator must be ODD "
+                "in the shifted grading — parity(|Q| + |base|) = "
+                f"{parity!r} for |Q| = {bracket.degree_Q!r}, "
+                f"|base| = {base.degree!r}; with an even shifted "
+                "generator [Q,Q] = 0 is vacuous and Jacobi does "
+                "not follow"
+            )
+
+        # 3. the CYCLIC (Lie-form) Jacobi claimed by
+        #    ``graded_jacobi_obstruction`` needs MORE than 1-2: a
+        #    derived bracket under those hypotheses is only LODAY
+        #    (left-Leibniz Jacobi); the cyclic form is equivalent
+        #    only where the derived bracket is genuinely skew on
+        #    every slot the triple exercises (2026-09-08 re-audit,
+        #    finding 2 — supercommutator counterexample with a
+        #    graded-Lie base and odd square-zero Q). Each skew
+        #    defect, on the operand pairs AND on the (inner result,
+        #    outer operand) pairs, is engine-checked to literal 0;
+        #    anything short of that refuses the cyclic claim.
+        def _skew_defect(x: Expr, y: Expr) -> Expr:
+            # Signs in the DERIVED bracket's own shifted convention
+            # (k = |Q| + 2|base|) — the same convention as the
+            # cyclic goal below; mixing conventions let six
+            # unshifted checks certify a non-zero unshifted goal
+            # (2026-09-08 second re-audit).
+            k = bracket.degree
+            try:
+                pxy = (
+                    (degree_of(x, registry) + k)
+                    * (degree_of(y, registry) + k)
+                ).parity()
+            except ValueError as exc:
+                raise ProofFailure(
+                    "DerivedBracketStrategy: cannot certify "
+                    "skewness — undeterminable degree in pair "
+                    f"({x!r}, {y!r}): {exc}"
+                )
+            if pxy is None:
+                raise ProofFailure(
+                    "DerivedBracketStrategy: cannot certify "
+                    "skewness — symbolic sign parity for pair "
+                    f"({x!r}, {y!r})"
+                )
+            xy = bracket.expand(x, y, registry)
+            yx = bracket.expand(y, x, registry)
+            return simplify(
+                Sum(xy, yx if pxy == 0 else Neg(yx)), registry
+            )
+
+        skew_pairs = [
+            (a, b),
+            (b, c),
+            (c, a),
+            (bracket.expand(b, c, registry), a),
+            (bracket.expand(c, a, registry), b),
+            (bracket.expand(a, b, registry), c),
+        ]
+        for (x, y) in skew_pairs:
+            defect = _skew_defect(x, y)
+            if defect != Integer(0):
+                raise ProofFailure(
+                    "DerivedBracketStrategy: the derived bracket "
+                    "is not certified skew on this triple — skew "
+                    f"defect of ({x._repr_inner()}, "
+                    f"{y._repr_inner()}) is "
+                    f"{defect._repr_inner()[:100]}; only the "
+                    "LODAY (left-Leibniz) Jacobi is licensed by "
+                    "[Q,Q] = 0, not the cyclic Lie form"
+                )
+
         try:
             jacobi_sum = bracket.graded_jacobi_obstruction(a, b, c, registry)
         except ValueError as exc:
@@ -504,8 +677,11 @@ class DerivedBracketStrategy:
                 obstruction_raw,
                 rule="DerivedBracketTheorem",
                 justification=(
-                    f"Jacobi on {bracket.name} ⟺ [Q, Q]_base = 0 "
-                    f"(Derived Bracket Theorem)"
+                    f"Jacobi on {bracket.name} for this triple "
+                    "reduces to [Q, Q]_base = 0 (Derived Bracket "
+                    "Theorem under the verified preconditions: "
+                    "graded-Lie base, odd shifted generator, "
+                    "per-slot skewness)"
                 ),
                 provenance_tag="theorem",
             )

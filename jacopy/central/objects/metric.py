@@ -177,4 +177,4 @@ def hodge(omega: Expr, g: Metric) -> HodgeStar:
                 f"hodge: argument has degree {p}, outside the valid "
                 f"range 0..{dim} for a bundle of dimension {dim}"
             )
-    return HodgeStar(omega, n)
+    return HodgeStar(omega, n, metric=g)

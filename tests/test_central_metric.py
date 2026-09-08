@@ -135,9 +135,11 @@ class TestHodge:
         assert degree_of(hodge(w, g)) == Degree.var("n") - p
 
     def test_hodge_repr(self):
+        # The metric is part of the star's identity (2026-09-07
+        # audit, finding 5) — it shows in the display too.
         g = metric(bundle=tangent_bundle(dim=3))
         (w,) = forms("ω", degree=1)
-        assert hodge(w, g)._repr_inner() == "⋆ω"
+        assert hodge(w, g)._repr_inner() == "⋆_gω"
 
     def test_hodge_rejects_non_metric(self):
         (w,) = forms("ω", degree=1)

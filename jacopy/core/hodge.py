@@ -18,14 +18,14 @@ this node as ``n − |arg|``.
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 from jacopy.core.expr import Expr
 from jacopy.core.symbolic_degree import Degree, DegreeLike, as_degree
 
 
 class HodgeStar(Expr):
-    """``⋆ω`` — the Hodge dual of a p-form ``ω``, an (n−p)-form.
+    """``⋆_g ω`` — the Hodge dual of a p-form ``ω``, an (n−p)-form.
 
     Parameters
     ----------
@@ -34,15 +34,32 @@ class HodgeStar(Expr):
     dim
         The dimension ``n`` of the bundle (int or :class:`Degree`; use
         ``Degree.var("n")`` for a symbolic dimension).
+    metric
+        The metric the star is taken with respect to (an Expr, usually
+        the central :class:`~jacopy.central.objects.metric.Metric`
+        node), or ``None`` for the bare structural star. The metric is
+        PART OF THE OPERATION'S IDENTITY: ``⋆_g dx = 1`` while
+        ``⋆_{4g} dx = ½`` in oriented dimension 1, so it participates
+        in ``_key`` — two stars with different metrics are never equal
+        (2026-09-07 audit, finding 5).
     """
 
-    __slots__ = ("_arg", "_dim")
+    __slots__ = ("_arg", "_dim", "_metric")
 
-    def __init__(self, arg: Expr, dim: DegreeLike) -> None:
+    def __init__(
+        self,
+        arg: Expr,
+        dim: DegreeLike,
+        *,
+        metric: Optional[Expr] = None,
+    ) -> None:
         if not isinstance(arg, Expr):
             raise TypeError("HodgeStar argument must be an Expr")
+        if metric is not None and not isinstance(metric, Expr):
+            raise TypeError("HodgeStar metric must be an Expr")
         self._arg = arg
         self._dim = as_degree(dim)
+        self._metric = metric
 
     @property
     def arg(self) -> Expr:
@@ -53,16 +70,37 @@ class HodgeStar(Expr):
         return self._dim
 
     @property
+    def metric(self) -> Optional[Expr]:
+        return self._metric
+
+    @property
     def children(self) -> Tuple[Expr, ...]:
         return (self._arg,)
 
+    def _rebuild(self, new_children: Tuple[Expr, ...]) -> "HodgeStar":
+        """Preserve dimension and metric context — the default
+        ``type(self)(*children)`` rebuild dropped ``dim`` and crashed
+        every generic tree pass (2026-09-07 audit, finding 6)."""
+        (arg,) = new_children
+        return HodgeStar(arg, self._dim, metric=self._metric)
+
     def _key(self) -> Any:
-        return (self._arg, self._dim)
+        return (self._arg, self._dim, self._metric)
 
     def _repr_inner(self) -> str:
+        if self._metric is not None:
+            return (
+                f"⋆_{self._metric._repr_inner()}"
+                f"{self._arg._repr_inner()}"
+            )
         return f"⋆{self._arg._repr_inner()}"
 
 
-def hodge_star(arg: Expr, dim: DegreeLike) -> HodgeStar:
+def hodge_star(
+    arg: Expr,
+    dim: DegreeLike,
+    *,
+    metric: Optional[Expr] = None,
+) -> HodgeStar:
     """Build the Hodge dual ``⋆ω`` (with dimension ``dim`` given)."""
-    return HodgeStar(arg, dim)
+    return HodgeStar(arg, dim, metric=metric)

@@ -154,8 +154,17 @@ def _swap_behavior(
     * Either factor carries :class:`NonCommuting`, swap forbidden.
     * Both carry :class:`AntiCommuting`, swap produces a flat ``-1``
       (parity delta ``1``).
-    * Both carry :class:`GradedCommutative`, or both are
-      :class:`Graded` (the implicit Koszul default), swap produces
+    * Both carry :class:`GradedCommutative`, swap produces
+      ``(-1)^{|a||b|}``.
+    * Either factor is an OPERATOR (a :class:`Derivation` node) with
+      no explicit marker pair above: swap FORBIDDEN. A Product of
+      operators is a composition, and composition is not governed by
+      the Koszul rule — degree alone would silently "prove"
+      ``X∘Y = Y∘X`` for degree-0 operators (2026-09-07 audit,
+      finding 1). Order is preserved; commutativity must be opted
+      into via the markers.
+    * Both plain :class:`Graded` VALUES (forms, functions,
+      multivectors — the implicit Koszul default), swap produces
       ``(-1)^{|a||b|}``.
     """
     if _is_scalar(a, registry) or _is_scalar(b, registry):
@@ -166,9 +175,12 @@ def _swap_behavior(
         return (True, Degree.const(1))
     if registry.has(a, GradedCommutative) and registry.has(b, GradedCommutative):
         return (True, _degree_of(a, registry) * _degree_of(b, registry))
-    # Implicit default: both Graded → Koszul. Preserves backward-compat
-    # with the pre-marker tests and matches the common case where the
-    # user declared grading without separately declaring the sign rule.
+    if isinstance(a, Derivation) or isinstance(b, Derivation):
+        # Operator composition: no implicit commutativity.
+        return (False, Degree.const(0))
+    # Implicit default: both Graded VALUES → Koszul. Matches the
+    # common case where the user declared grading without separately
+    # declaring the sign rule.
     return (True, _degree_of(a, registry) * _degree_of(b, registry))
 
 

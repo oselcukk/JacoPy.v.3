@@ -164,11 +164,14 @@ def _make_sentinel(prototype: Atom, depth: int) -> Atom:
 
 def _alpha_canonical_key(node: IndexedSum, depth: int) -> Any:
     sentinel = _make_sentinel(node._dummy, depth)
-    canon_body = node._body.substitute_atom(node._dummy, sentinel)
+    canon_body = _alpha_normalized(
+        node._body.substitute_atom(node._dummy, sentinel),
+        depth + 1,
+    )
     return (
         "IndexedSum",
         _range_key(node._range),
-        _walk_key(canon_body, depth + 1),
+        canon_body,
     )
 
 
@@ -184,18 +187,57 @@ def _range_key(range_: Any) -> Any:
     return ("opaque", type(range_).__name__, repr(range_))
 
 
-def _walk_key(expr: Expr, depth: int) -> Any:
-    """Hashable structural key, descending into nested IndexedSums with
-    depth-aware sentinels.
-    """
+class _BoundSumToken(Atom):
+    """Opaque stand-in for a NESTED IndexedSum inside an
+    α-normalized key.
+
+    Carries the nested sum's fully SCOPED canonical key, computed at
+    the correct depth by the enclosing normalization. Embedding the
+    real ``IndexedSum`` node instead would let its own ``_key()``
+    restart the depth counter at 0, aliasing an inner ``$bound_0``
+    with the OUTER binder's sentinel — the 2026-09-08 re-audit
+    regression where ``Σᵢ Σⱼ i`` (= 6) compared equal to
+    ``Σᵢ Σⱼ j`` (= 14)."""
+
+    __slots__ = ("_scoped_key",)
+
+    def __init__(self, scoped_key: Any) -> None:
+        self._scoped_key = scoped_key
+
+    def _key(self) -> Any:
+        return self._scoped_key
+
+    def _repr_inner(self) -> str:  # pragma: no cover - debug only
+        return "⟨Σ-key⟩"
+
+
+def _alpha_normalized(expr: Expr, depth: int) -> Expr:
+    """α-normalize nested IndexedSum dummies while PRESERVING every
+    node's full semantic identity.
+
+    The key embeds real Expr nodes (whose own ``_key()`` carries all
+    metadata), so e.g. ``Σᵢ [A,B]_bracket`` and ``Σᵢ 0_bracket`` can
+    never collide (2026-09-07 audit, finding 3: the previous
+    ``_walk_key`` compared compound nodes by class name + children
+    only). Nested sums become :class:`_BoundSumToken` atoms whose
+    key was computed IN THIS SCOPE at the correct depth — never a
+    live ``IndexedSum`` whose own ``_key()`` would restart the depth
+    counter (2026-09-08 re-audit, finding 1)."""
     if isinstance(expr, IndexedSum):
-        return _alpha_canonical_key(expr, depth)
+        sentinel = _make_sentinel(expr._dummy, depth)
+        body = _alpha_normalized(
+            expr._body.substitute_atom(expr._dummy, sentinel),
+            depth + 1,
+        )
+        return _BoundSumToken(
+            ("IndexedSum", _range_key(expr._range), body)
+        )
     if expr.is_atom:
-        return ("Atom", type(expr).__name__, expr._key())
-    return (
-        "Compound",
-        type(expr).__name__,
-        tuple(_walk_key(c, depth) for c in expr.children),
+        return expr
+    return expr._rebuild(
+        tuple(
+            _alpha_normalized(c, depth) for c in expr.children
+        )
     )
 
 
