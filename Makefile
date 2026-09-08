@@ -33,10 +33,10 @@ kernel: $(VENV)/.installed
 		--display-name="Python (jacopy v3)"
 
 test: $(VENV)/.installed
-	$(VBIN)/python -m pytest tests/ -q --ignore=tests/test_docs
+	$(VBIN)/python -m pytest tests/ -q
 
 notebooks: $(VENV)/.installed
-	$(VBIN)/python -m pytest tests/test_docs -q
+	$(VBIN)/python scripts/run_notebooks.py
 
 clean:
 	rm -rf $(VENV) .pytest_cache **/__pycache__ .mypy_cache .ruff_cache
