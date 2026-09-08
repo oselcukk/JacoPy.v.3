@@ -37,6 +37,14 @@ from jacopy.central.tangent.definitions import (
 )
 
 
+def _TensorLieEval(registry):
+    from jacopy.central.calculus.tensor_calculus import (
+        TensorLieEvalDefinition,
+    )
+
+    return TensorLieEvalDefinition(registry)
+
+
 def tangent_engine(
     *,
     registry: Optional[PropertyRegistry] = None,
@@ -86,6 +94,9 @@ def tangent_engine(
             SNOrientationDefinition(registry),
             SNExpansionDefinition(registry),
             LieOnMultivectorDefinition(registry),
+            # (q,r)-tensor Lie evaluation law (PDF 9e; 2026-09-08
+            # audit compliance-2 closure).
+            _TensorLieEval(registry),
         ],
         mode=mode,
     )

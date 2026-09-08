@@ -63,6 +63,7 @@ from jacopy.packages.metric_affine.koszul import (
     prove_levi_civita_unique,
 )
 from jacopy.packages.metric_affine.metric import (
+    as_metric_context,
     InverseMetricComponent,
     Metric,
     MetricCompatibilityDefinition,
@@ -116,6 +117,7 @@ __all__ = [
     "NonMetricity",
     "NonMetricityExpansionDefinition",
     "TorsionFreeDefinition",
+    "as_metric_context",
     "metric",
     "nonmetricity",
     "prove_generalized_koszul",

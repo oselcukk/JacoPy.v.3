@@ -161,7 +161,25 @@ def hodge(omega: Expr, g: Metric) -> HodgeStar:
     if not isinstance(omega, Expr):
         raise TypeError("hodge argument must be an Expr")
     if not isinstance(g, Metric):
-        raise TypeError("hodge second argument must be a Metric")
+        # PDF item 5 compatibility bridge (2026-09-08 audit,
+        # compliance finding 3): accept the metric-affine package's
+        # metric CONTEXT too — same defining semantics (symmetric,
+        # non-degenerate (0,2) by definition), shared by name. The
+        # central→packages import stays function-local (lazy) to
+        # respect the layering.
+        try:
+            from jacopy.packages.metric_affine.metric import (
+                Metric as AffineMetric,
+            )
+        except ImportError:  # pragma: no cover
+            AffineMetric = ()
+        if isinstance(g, AffineMetric):
+            g = Metric(g.name)
+        else:
+            raise TypeError(
+                "hodge second argument must be a Metric "
+                "(central atom or metric-affine context)"
+            )
     dim = g.bundle.dim
     n = Degree.var("n") if dim is None else Degree.const(dim)
     if dim is not None:

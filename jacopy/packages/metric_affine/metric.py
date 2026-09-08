@@ -136,6 +136,32 @@ def metric(name: str = "g") -> Metric:
     return Metric(name)
 
 
+def as_metric_context(g) -> Metric:
+    """COERCE a metric object into this package's context (the PDF
+    item 5 compatibility bridge; 2026-09-08 audit, compliance
+    finding 3).
+
+    Accepts either this package's :class:`Metric` context or the
+    central :class:`jacopy.central.objects.metric.Metric` ATOM — the
+    two carry the same defining semantics (a symmetric,
+    non-degenerate (0,2)-tensor BY DEFINITION), differing only in
+    their role (Expr atom for Hodge/musical vs evaluation context
+    here), so the bridge is the shared name. Anything else raises.
+    """
+    if isinstance(g, Metric):
+        return g
+    from jacopy.central.objects.metric import (
+        Metric as CentralMetric,
+    )
+
+    if isinstance(g, CentralMetric):
+        return Metric(g.name)
+    raise TypeError(
+        "expected a metric (metric_affine context or the central "
+        f"Metric atom), got {type(g).__name__}"
+    )
+
+
 # --------------------------------------------------------------------- #
 # Definitional rules for g                                               #
 # --------------------------------------------------------------------- #
@@ -280,8 +306,7 @@ def inverse_metric_component(
     """``g^{ab}`` of the metric ``g`` (canonical index order)."""
     from jacopy.central.objects.frame import _index_str
 
-    if not isinstance(g, Metric):
-        raise TypeError("inverse_metric_component expects a Metric")
+    g = as_metric_context(g)
     return inverse_metric_component_named(
         g.name, _index_str(first), _index_str(second)
     )
@@ -452,8 +477,7 @@ def nonmetricity(
     """``Q(X, Y, Z)`` of the pair ``(∇, g)``."""
     if not isinstance(conn, Connection):
         raise TypeError("nonmetricity expects a Connection")
-    if not isinstance(g, Metric):
-        raise TypeError("nonmetricity expects a Metric")
+    g = as_metric_context(g)
     return NonMetricity(
         conn.name, g.name, X, Y, Z, bundle=conn.bundle
     )
@@ -509,8 +533,7 @@ class MetricCompatibilityDefinition(Definition):
     def __init__(self, conn: Connection, g: Metric) -> None:
         if not isinstance(conn, Connection):
             raise TypeError("MetricCompatibilityDefinition expects a Connection")
-        if not isinstance(g, Metric):
-            raise TypeError("MetricCompatibilityDefinition expects a Metric")
+        g = as_metric_context(g)
         self._conn = conn
         self._g = g
         self.name = (

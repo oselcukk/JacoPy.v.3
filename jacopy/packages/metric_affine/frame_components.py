@@ -745,8 +745,9 @@ def ricci_scalar(
         inverse_metric_component,
     )
 
-    if not isinstance(g, Metric):
-        raise TypeError("ricci_scalar expects a Metric")
+    from jacopy.packages.metric_affine.metric import as_metric_context
+
+    g = as_metric_context(g)
     s, t, u = bounds
     if len({s, t, u}) != 3:
         raise ValueError("the three bound names must be distinct")
@@ -778,8 +779,9 @@ def einstein_component(
     from jacopy.core.expr import Rational
     from jacopy.packages.metric_affine.metric import Metric
 
-    if not isinstance(g, Metric):
-        raise TypeError("einstein_component expects a Metric")
+    from jacopy.packages.metric_affine.metric import as_metric_context
+
+    g = as_metric_context(g)
     return Sum(
         ricci_component(conn, fr, b, d),
         Neg(

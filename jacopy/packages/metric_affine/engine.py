@@ -107,4 +107,9 @@ def metric_affine_engine(
     # classified; the tangent engine deliberately omits it, packages
     # opt in): torsion/curvature tensoriality lives on it.
     engine.register(LieBracketLeibnizDefinition(registry))
+    from jacopy.central.calculus.tensor_calculus import (
+        TensorCovariantEvalDefinition,
+    )
+
+    engine.register(TensorCovariantEvalDefinition(registry))
     return engine
