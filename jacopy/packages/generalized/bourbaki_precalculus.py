@@ -357,10 +357,18 @@ class BLieZLawsDefinition(Definition):
 class Axiom914Declaration(Definition):
     """DECLARED axiom (9.14):
     ``ℒ^R_U ι_V z → ι_{[U,V]} z + ι_V ℒ^Z_U z`` — terminating
-    (the ℒ^R node disappears)."""
+    (the ℒ^R node disappears). ``bracket`` parametrizes the base
+    bracket: the Lie bracket for ``A = TM`` (default), or an
+    ABSTRACT algebroid bracket for INDEPENDENT A-data (PDF 13k —
+    the quintet never assumed A = TM structurally)."""
 
-    name = "(9.14): ℒ^R_U ι_V z = ι_[U,V] z + ι_V ℒ^Z_U z"
     anchor = BLieR
+
+    def __init__(self, bracket=lie_bracket) -> None:
+        self._bracket = bracket
+        self.name = (
+            "(9.14): ℒ^R_U ι_V z = ι_[U,V] z + ι_V ℒ^Z_U z"
+        )
 
     def matches(self, expr: Expr) -> bool:
         return isinstance(expr, BLieR) and isinstance(
@@ -370,7 +378,9 @@ class Axiom914Declaration(Definition):
     def rewrite(self, expr: Expr) -> Expr:
         inner = expr.r
         return Sum(
-            BIota(lie_bracket(expr.U, inner.U), inner.z),
+            BIota(
+                self._bracket(expr.U, inner.U), inner.z
+            ),
             BIota(inner.U, BLieZ(expr.U, inner.z)),
         )
 
@@ -411,14 +421,18 @@ class BourbakiPreCalculus:
 
 def bourbaki_engine(
     registry: Optional[PropertyRegistry] = None,
+    *,
+    bracket=lie_bracket,
+    base_engine=None,
 ) -> ExpansionEngine:
     """Definitional rules of the quintet + the declared (9.14),
-    layered on the tangent engine (for ``[U,V]`` bookkeeping)."""
+    layered on the tangent engine (for ``[U,V]`` bookkeeping) —
+    or on ``base_engine`` for an INDEPENDENT abstract A (13k)."""
     from jacopy.central.tangent.engine import tangent_engine
 
     eng = ExpansionEngine(
         [
-            Axiom914Declaration(),
+            Axiom914Declaration(bracket),
             BIotaBilinearityDefinition(registry),
             BSymbolBilinearityDefinition(registry),
             BLieRAdditivityDefinition(registry),
@@ -427,7 +441,12 @@ def bourbaki_engine(
             BLieZLawsDefinition(registry),
         ]
     )
-    for d_ in tangent_engine(registry=registry).definitions:
+    base = (
+        base_engine
+        if base_engine is not None
+        else tangent_engine(registry=registry)
+    )
+    for d_ in base.definitions:
         eng.register(d_)
     return eng
 
@@ -444,12 +463,15 @@ def _normalize(engine, expr: Expr, registry) -> Expr:
 
 
 def standard_bracket(
-    U: Expr, z: Expr, V: Expr, y: Expr
+    U: Expr, z: Expr, V: Expr, y: Expr, *, bracket=lie_bracket
 ) -> Tuple[Expr, Expr]:
     """(9.17): ``[U+z, V+y]_S = [U,V] ⊕ (ℒ^Z_U y − ℒ^Z_V z +
-    dι_V z)`` as a ``(vector, Z)`` component pair."""
+    dι_V z)`` as a ``(vector, Z)`` component pair. ``bracket``
+    parametrizes the A-side (default: the Lie bracket, A = TM;
+    pass an abstract algebroid's bracket for independent A-data,
+    PDF 13k)."""
     return (
-        lie_bracket(U, V),
+        bracket(U, V),
         Sum(
             BLieZ(U, y),
             Neg(BLieZ(V, z)),
@@ -472,13 +494,17 @@ def prove_standard_symmetric_part(
     y: Expr,
     *,
     registry: Optional[PropertyRegistry] = None,
+    bracket=lie_bracket,
+    base_engine=None,
 ) -> Tuple[ProofChain, Theorem]:
     """Thm 9.1, check 1: ``[U+z,V+y]_S + [V+y,U+z]_S = d g_S`` —
     the ℒ^Z terms cancel pairwise and ``d``'s additivity collects
     the rest; the vector side is the Lie antisymmetry."""
-    engine = bourbaki_engine(registry)
-    v12, z12 = standard_bracket(U, z, V, y)
-    v21, z21 = standard_bracket(V, y, U, z)
+    engine = bourbaki_engine(
+        registry, bracket=bracket, base_engine=base_engine
+    )
+    v12, z12 = standard_bracket(U, z, V, y, bracket=bracket)
+    v21, z21 = standard_bracket(V, y, U, z, bracket=bracket)
     diffs = [
         Sum(v12, v21),
         Sum(
@@ -534,6 +560,8 @@ def prove_standard_metric_invariance(
     x: Expr,
     *,
     registry: Optional[PropertyRegistry] = None,
+    bracket=lie_bracket,
+    base_engine=None,
 ) -> Tuple[ProofChain, Theorem]:
     """Thm 9.1, check 2: the metric invariance (7.8) of the
     standard construction,
@@ -543,10 +571,12 @@ def prove_standard_metric_invariance(
 
     — (9.14) opens the left side; the difference is exactly a
     combination of (9.15) instances, cited as declared zeros."""
-    engine = bourbaki_engine(registry)
+    engine = bourbaki_engine(
+        registry, bracket=bracket, base_engine=base_engine
+    )
     lhs = BLieR(U, standard_metric(V, y, W, x))
-    bv1, bz1 = standard_bracket(U, z, V, y)
-    bv2, bz2 = standard_bracket(U, z, W, x)
+    bv1, bz1 = standard_bracket(U, z, V, y, bracket=bracket)
+    bv2, bz2 = standard_bracket(U, z, W, x, bracket=bracket)
     rhs = Sum(
         standard_metric(bv1, bz1, W, x),
         standard_metric(V, y, bv2, bz2),
