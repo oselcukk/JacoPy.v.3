@@ -135,6 +135,34 @@ def _to_vec(expr: Expr, acc=None, coeff=Fraction(1)):
                 rest[0] if len(rest) == 1 else Product(*rest)
             )
             return _to_vec(core, acc, coeff * num)
+        # Distribute a Sum/Neg factor (multilinearity of the
+        # monomial reading) — collect passes fold common scalar
+        # factors back into ``f·(a + b)``, which would otherwise
+        # be one opaque monomial (2026-09-08, Bourbaki
+        # left-Leibniz).
+        for k, c in enumerate(expr.children):
+            if isinstance(c, Sum):
+                for t in c.children:
+                    _to_vec(
+                        Product(
+                            *expr.children[:k],
+                            t,
+                            *expr.children[k + 1 :],
+                        ),
+                        acc,
+                        coeff,
+                    )
+                return acc
+            if isinstance(c, Neg):
+                return _to_vec(
+                    Product(
+                        *expr.children[:k],
+                        c.arg,
+                        *expr.children[k + 1 :],
+                    ),
+                    acc,
+                    -coeff,
+                )
     if isinstance(expr, Pairing):
         if isinstance(expr.X, Sum):
             for t in expr.X.children:
