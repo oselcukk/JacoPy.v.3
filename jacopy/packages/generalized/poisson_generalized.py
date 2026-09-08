@@ -50,7 +50,9 @@ from jacopy.core.expr import (
     Sum,
 )
 from jacopy.core.registry import PropertyRegistry
+from jacopy.core.multi_eval import MultiEval
 from jacopy.proof.chain import ProofChain
+from jacopy.proof.expansion import Definition
 from jacopy.proof.step import ProofStep
 from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
@@ -293,6 +295,167 @@ def prove_theta_d_pairing_value(
     )
 
 
+
+# ------------------------------------------------------------------ #
+# Sharp-pairing canonicalization (the [C'5] closure, 2026-09-08)     #
+# ------------------------------------------------------------------ #
+#
+# One scalar, three faces: θ(a, b) = ⟨b, θ♯a⟩ = −⟨a, θ♯b⟩ (the
+# defining relation of the sharp plus bivector antisymmetry). The
+# canonical representative, oriented so the three rules below are
+# jointly TERMINATING (each strictly reduces in a well-founded
+# order: MultiEval → Pairing for non-exact slots; Pairing →
+# MultiEval when the sharp slot is exact; sharp always on the
+# smaller-repr argument):
+#
+# * both slots non-exact  → ⟨larger, θ♯smaller⟩ (Pairing form),
+# * a slot exact          → θ(dh, b) (MultiEval form — the sharp
+#   ACTION's own canonical output, so no cycle with it).
+#
+# An earlier revision oriented the side-swap the WRONG way and
+# cycled against the unfold; the fix is the orientation, not a
+# deeper confluence obstacle.
+
+
+class ThetaUnfoldDefinition(Definition):
+    """``θ(a, b) → ⟨b, θ♯a⟩`` when BOTH slots are non-exact."""
+
+    anchor = MultiEval
+
+    def __init__(self, N: NambuPoissonStructure) -> None:
+        self._N = N
+        self.name = (
+            "sharp-pairing canonical (unfold): "
+            "θ(a,b) = ⟨b, θ♯a⟩ (both slots non-exact)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.packages.poisson.showcase import _is_exact
+
+        return (
+            isinstance(expr, MultiEval)
+            and expr.head == self._N.pi
+            and expr.arity == 2
+            and not _is_exact(expr.args[0])
+            and not _is_exact(expr.args[1])
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.pairing import Pairing
+
+        a, b = expr.args
+        return Pairing(b, self._N.sharp_vf(a))
+
+
+class SharpPairingExactFoldDefinition(Definition):
+    """``⟨b, θ♯dh⟩ → θ(dh, b)`` — an EXACT sharp slot folds back to
+    the MultiEval face (the sharp action's canonical form)."""
+
+    def __init__(self, N: NambuPoissonStructure) -> None:
+        from jacopy.packages.poisson.nambu import NambuSharpVF
+
+        self._N = N
+        self._sharp_cls = NambuSharpVF
+        self.anchor = __import__(
+            "jacopy.core.pairing", fromlist=["Pairing"]
+        ).Pairing
+        self.name = (
+            "sharp-pairing canonical (exact fold): "
+            "⟨b, θ♯dh⟩ = θ(dh, b)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.pairing import Pairing
+        from jacopy.packages.poisson.showcase import _is_exact
+
+        return (
+            isinstance(expr, Pairing)
+            and isinstance(expr.X, self._sharp_cls)
+            and expr.X.pi == self._N.pi
+            and _is_exact(expr.X.omega)
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        return MultiEval(
+            self._N.pi,
+            expr.X.omega,
+            expr.alpha,
+            alternating=True,
+            slot_kind="covector",
+        )
+
+
+class SharpPairingSideDefinition(Definition):
+    """``⟨a, θ♯b⟩ → −⟨b, θ♯a⟩`` when the sharp carries the
+    LARGER-repr argument (bivector antisymmetry; matches the unfold
+    output, so jointly terminating)."""
+
+    def __init__(self, N: NambuPoissonStructure) -> None:
+        from jacopy.core.pairing import Pairing
+        from jacopy.packages.poisson.nambu import NambuSharpVF
+
+        self._N = N
+        self._sharp_cls = NambuSharpVF
+        self.anchor = Pairing
+        self.name = (
+            "sharp-pairing canonical (side): "
+            "⟨a, θ♯b⟩ = −⟨b, θ♯a⟩ (sharp on the smaller)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.pairing import Pairing
+        from jacopy.packages.poisson.showcase import _is_exact
+
+        return (
+            isinstance(expr, Pairing)
+            and isinstance(expr.X, self._sharp_cls)
+            and expr.X.pi == self._N.pi
+            and not _is_exact(expr.X.omega)
+            and not _is_exact(expr.alpha)
+            and expr.X.omega._repr_inner()
+            > expr.alpha._repr_inner()
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.pairing import Pairing
+
+        return Neg(
+            Pairing(
+                expr.X.omega,
+                self._N.sharp_vf(expr.alpha),
+            )
+        )
+
+
+def _invariance_engine(N, registry, *, declare_poisson: bool):
+    from jacopy.central.calculus import (
+        ActExpansionDefinition,
+        MultiEvalArgLinearityDefinition,
+    )
+    from jacopy.central.tangent.lie_bracket import (
+        LieBracketLeibnizDefinition,
+    )
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        InteriorAnticommuteDefinition,
+        LieIotaCommutatorDefinition,
+        NambuMorphismDeclaration,
+    )
+    from jacopy.packages.drinfeld.twist import _twist_engine
+
+    engine = _twist_engine(N, registry)
+    engine.register(LieIotaCommutatorDefinition())
+    engine.register(InteriorAnticommuteDefinition())
+    if declare_poisson:
+        engine.register(NambuMorphismDeclaration(N))
+    engine.register(ActExpansionDefinition(registry))
+    engine.register(MultiEvalArgLinearityDefinition(registry))
+    engine.register(LieBracketLeibnizDefinition(registry))
+    engine.register(ThetaUnfoldDefinition(N))
+    engine.register(SharpPairingExactFoldDefinition(N))
+    engine.register(SharpPairingSideDefinition(N))
+    return engine
+
+
 def prove_theta_invariance(
     N: NambuPoissonStructure,
     U: Expr,
@@ -309,50 +472,19 @@ def prove_theta_invariance(
 
     ``ρ(x)⟨y, z⟩₊ = ⟨x∘_θ y, z⟩₊ + ⟨y, x∘_θ z⟩₊``
 
-    with the TOTAL anchor acting on the scalar pairing.
-
-    STATUS (2026-09-08): DIAGNOSED OPEN — an honest-fail. The
-    identity is mathematically verified by hand (pairing-Leibniz +
-    the sharp-pairing swap + 𝒦̃-antisymmetry close it on paper),
-    and every ingredient identity normalizes to literal 0
-    standalone in BOTH normal-form languages (the θ(·,·)-MultiEval
-    "fold" language of the tilde engine and the ⟨·,θ♯·⟩-Pairing
-    language without the fold). The MIXED-language residual however
-    sits at a stuck rewriting fixpoint: cancellation needs the
-    Pairing↔MultiEval bridge in the UNFOLD direction, which would
-    cycle against the fold rule; and the 4.20 compat route is
-    tautological at p = 1. Closing this cleanly needs either a
-    termination-designed bidirectional bridge or 6.J-style
-    stall-difference mining with cross-language 2NF instances —
-    recorded in ROADMAP as the 14f.i deferral. This prover runs the
-    machinery and raises with the 14-term residual."""
+    with the TOTAL anchor acting on the scalar pairing — CLOSED
+    (2026-09-08, second pass): the missing ingredient was a
+    consistent canonical representative for the three faces
+    ``θ(a,b) = ⟨b,θ♯a⟩ = −⟨a,θ♯b⟩`` of the sharp-pairing scalar.
+    With the exact-oriented canonicalization triple above the
+    invariance defect normalizes to literal 0 outright (the earlier
+    'diagnosed open' status came from a wrongly-oriented side rule
+    that cycled — the orientation, not confluence, was the
+    obstacle)."""
     _require_poisson(N)
-    from jacopy.central.calculus import (
-        ActExpansionDefinition,
-        MultiEvalArgLinearityDefinition,
+    engine = _invariance_engine(
+        N, registry, declare_poisson=declare_poisson
     )
-    from jacopy.central.tangent.lie_bracket import (
-        LieBracketLeibnizDefinition,
-    )
-    from jacopy.packages.drinfeld.tilde_calculus import (
-        InteriorAnticommuteDefinition,
-        LieIotaCommutatorDefinition,
-        NambuMorphismDeclaration,
-    )
-    from jacopy.packages.drinfeld.twist import _twist_engine
-
-    # Deliberately WITHOUT the sharp-pairing FOLD (⟨β,θα⟩ → θ(α,β)):
-    # the invariance identity closes in the pairing/Palais language
-    # (dζ(U, θ♯η) unrolls to the bracket-pairing terms), which the
-    # fold's collected MultiEval normal form blocks.
-    engine = _twist_engine(N, registry)
-    engine.register(LieIotaCommutatorDefinition())
-    engine.register(InteriorAnticommuteDefinition())
-    if declare_poisson:
-        engine.register(NambuMorphismDeclaration(N))
-    engine.register(ActExpansionDefinition(registry))
-    engine.register(MultiEvalArgLinearityDefinition(registry))
-    engine.register(LieBracketLeibnizDefinition(registry))
     lhs = Act(
         theta_anchor(N, U, omega),
         canonical_pairing(V, eta, W, zeta),
@@ -363,194 +495,26 @@ def prove_theta_invariance(
         canonical_pairing(xy_vec, xy_form, W, zeta),
         canonical_pairing(V, eta, xz_vec, xz_form),
     )
-    diff = Sum(lhs, Neg(rhs))
-    residual = _normalize(engine, diff, registry)
-    steps: List[ProofStep] = [
-        ProofStep(
-            diff,
-            residual,
-            rule="normalize (tilde engine fixpoint)",
-            justification="registered rules",
-        )
-    ]
-
-    # The surviving terms are a combination of PAIRING-LEIBNIZ
-    # bridges — mechanical zeros of the shape
-    #
-    #   ⟨a, [X, Y]⟩ − X(⟨a, Y⟩) + ⟨ℒ_X a, Y⟩ = 0
-    #
-    # (the Lie derivative's Leibniz rule over the canonical
-    # pairing, with Y a sharp θ♯b) — subtracted greedily under a
-    # strictly decreasing node-size metric (the 5.E.2b citation
-    # mechanism, small scale).
-    if residual != Integer(0):
-        from jacopy.central.tangent.cartan import L as _L
-        from jacopy.central.tangent.lie_bracket import (
-            lie_bracket,
-        )
-        from jacopy.core.pairing import Pairing
-        from jacopy.packages.poisson.koszul_jacobi import (
-            _node_size,
-        )
-
-        trip = (omega, eta, zeta)
-        directions = (U, V, W) + tuple(
-            N.sharp_vf(a) for a in trip
-        )
-        # Each bridge is ENGINE-PROVEN zero as a whole; the citable
-        # seed is the sum of its PER-TERM normal forms — already in
-        # the residual's monomial language, so subtraction can only
-        # collect and cancel (whole-sum normalization would just
-        # give back 0 and teach nothing).
-        seeds: List[Expr] = []
-        for X in directions:
-            for a in trip:
-                for Y in directions:
-                    if X is Y:
-                        continue
-                    parts = (
-                        Pairing(a, lie_bracket(X, Y)),
-                        Neg(Act(X, Pairing(a, Y))),
-                        Pairing(_L(X, a), Y),
-                    )
-                    if (
-                        _normalize(engine, Sum(*parts), registry)
-                        != Integer(0)
-                    ):
-                        continue
-                    cited = Sum(
-                        *(
-                            _normalize(engine, t, registry)
-                            for t in parts
-                        )
-                    )
-                    nf = _normalize(engine, cited, registry)
-                    if nf == Integer(0):
-                        continue
-                    seeds.append(nf)
-                    seeds.append(
-                        _normalize(engine, Neg(cited), registry)
-                    )
-        for _round in range(24):
-            if residual == Integer(0):
-                break
-            progressed = False
-            for seed in seeds:
-                cand = _normalize(
-                    engine, Sum(residual, Neg(seed)), registry
-                )
-                if _node_size(cand) < _node_size(residual):
-                    steps.append(
-                        ProofStep(
-                            residual,
-                            cand,
-                            rule=(
-                                "cite pairing-Leibniz bridge "
-                                "(proven zero)"
-                            ),
-                            justification=(
-                                "ℒ_X over ⟨·,·⟩: "
-                                "⟨a,[X,Y]⟩ = X⟨a,Y⟩ − ⟨ℒ_Xa, Y⟩"
-                            ),
-                            provenance_tag="theorem",
-                        )
-                    )
-                    residual = cand
-                    progressed = True
-                    break
-            if not progressed:
-                break
-
-    if residual != Integer(0):
-        # ℚ-linear phase (the 5.E.2b mechanism): the residual is an
-        # exact rational combination of the proven-zero seeds.
-        from jacopy.packages.poisson.koszul_jacobi import (
-            _gauss_solve,
-            _to_vec,
-        )
-
-        target = _to_vec(residual)
-        rows = [_to_vec(s) for s in seeds]
-        keys = sorted(
-            set(target) | {k for row in rows for k in row}
-        )
-        coeffs = (
-            _gauss_solve(rows, target, keys) if rows else None
-        )
-        if coeffs is not None:
-            from fractions import Fraction
-
-            from jacopy.core.expr import Product as _Product
-            from jacopy.core.expr import Rational as _Rational
-
-            def times(c: Fraction, e: Expr) -> Expr:
-                if c == 1:
-                    return e
-                if c == -1:
-                    return Neg(e)
-                n_, d_ = c.numerator, c.denominator
-                base = e if n_ > 0 else Neg(e)
-                ce = (
-                    Integer(abs(n_))
-                    if d_ == 1
-                    else _Rational(abs(n_), d_)
-                )
-                return _Product(ce, base)
-
-            nz = [
-                (i, c) for i, c in enumerate(coeffs) if c != 0
-            ]
-            combo = Sum(
-                residual,
-                *(times(-c, seeds[i]) for i, c in nz),
-            )
-            check = _normalize(engine, combo, registry)
-            if check == Integer(0):
-                steps.append(
-                    ProofStep(
-                        residual,
-                        Integer(0),
-                        rule=(
-                            "cite ℚ-linear combination of "
-                            f"{len(nz)} pairing-Leibniz bridges "
-                            "(engine-verified)"
-                        ),
-                        justification=(
-                            "each bridge is a proven zero; the "
-                            "combination subtracts to literal 0"
-                        ),
-                        provenance_tag="theorem",
-                    )
-                )
-                residual = Integer(0)
-
-    if residual != Integer(0):
-        raise ProofFailure(
-            "poisson_generalized_invariance: residual survives — "
-            + residual._repr_inner()[:160]
-        )
-
-    chain = ProofChain(steps)
-    theorem = Theorem(
-        name="poisson_generalized_invariance",
-        statement=(
-            "ρ(x)⟨y,z⟩₊ = ⟨x∘_θ y, z⟩₊ + ⟨y, x∘_θ z⟩₊ on "
-            "(TM)₀ ⊕ (T*M)_θ ([C'5], total anchor)"
-        ),
-        lhs=diff,
-        rhs=Integer(0),
-        proof=chain,
-        generality="generic-function",
+    return _zero_theorem(
+        "poisson_generalized_invariance",
+        "ρ(x)⟨y,z⟩₊ = ⟨x∘_θ y, z⟩₊ + ⟨y, x∘_θ z⟩₊ on "
+        "(TM)₀ ⊕ (T*M)_θ ([C'5], total anchor)",
+        [Sum(lhs, Neg(rhs))],
+        engine,
+        registry,
         from_axioms=(
             "tilde-Dorfman + canonical pairing definitions",
             "Cartan + Koszul/tilde calculus",
-            "pairing-Leibniz bridges (cited mechanical zeros)",
+            "sharp-pairing canonicalization (definitional: "
+            "θ(a,b) = ⟨b,θ♯a⟩ + bivector antisymmetry)",
         )
         + (
             ("declared Poisson condition",)
             if declare_poisson
             else ()
         ),
-        notes="PDF 14f.i / Watamura §2",
+        notes=(
+            "PDF 14f.i / Watamura §2 — the 14f.i deferral CLOSES"
+        ),
+        labels=("invariance defect normalizes to 0",),
     )
-    return chain, theorem

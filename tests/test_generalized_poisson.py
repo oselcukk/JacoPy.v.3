@@ -98,16 +98,20 @@ def test_theta_symmetric_part_c4_at_p1(setup):
     ).steps
 
 
-def test_theta_invariance_is_a_diagnosed_open_slice(setup):
-    # [C'5] honest-fail pin (2026-09-08): the identity is verified
-    # on paper but the mixed-language residual sits at a stuck
-    # rewriting fixpoint — see the prover docstring and the ROADMAP
-    # 14f.i deferral. This pin flips when the confluence work lands.
+def test_theta_invariance_c5_closes(setup):
+    # [C'5] — CLOSED 2026-09-08 (second pass): the former
+    # honest-fail pin flipped once the sharp-pairing scalar got a
+    # consistent canonical representative (θ(a,b) = ⟨b,θ♯a⟩ =
+    # −⟨a,θ♯b⟩, exact-oriented). The earlier 'stuck fixpoint' was a
+    # wrongly-oriented side rule, not a confluence obstacle.
     reg, f, h, om, et, ze, U, V, W, X, N = setup
-    with pytest.raises(ProofFailure, match="residual"):
-        prove_theta_invariance(
-            N, U, om, V, et, W, ze, registry=reg
-        )
+    chain, thm = prove_theta_invariance(
+        N, U, om, V, et, W, ze, registry=reg
+    )
+    assert "[C'5]" in thm.statement
+    assert any(
+        "canonicalization" in a for a in thm.from_axioms
+    )
 
 
 def test_theta_structures_reject_higher_order():
