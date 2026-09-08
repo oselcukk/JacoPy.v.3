@@ -27,6 +27,9 @@ from jacopy.packages.metric_affine.e_connection import (
     prove_e_torsion_second_slot_tensorial,
     prove_pseudo_torsion_first_slot_defect,
 )
+from jacopy.packages.metric_affine.component_workflow import (
+    ComponentInput,
+)
 from jacopy.packages.metric_affine.engine import metric_affine_engine
 from jacopy.packages.metric_affine.modified import (
     CoframeRecombinationDefinition,
@@ -117,6 +120,7 @@ __all__ = [
     "NonMetricity",
     "NonMetricityExpansionDefinition",
     "TorsionFreeDefinition",
+    "ComponentInput",
     "as_metric_context",
     "metric",
     "nonmetricity",
