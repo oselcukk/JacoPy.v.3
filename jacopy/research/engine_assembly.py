@@ -31,6 +31,62 @@ from jacopy.core.wedge import Wedge
 from jacopy.proof.expansion import Definition, ExpansionEngine
 
 
+def _wedge_degree(c: Expr, registry) -> Optional[int]:
+    """The EXTERIOR-algebra degree of a wedge factor as a concrete
+    int, or ``None`` when it is not certain. A vector field has
+    operator degree 0 but wedge degree 1 — the ``wedge_degree`` lift
+    wins whenever a node carries one, and a derivation without a lift
+    is refused rather than graded as a scalar (2026-09-09 audit,
+    finding F1: sorting ``Y ∧ X`` as if both were even proved a false
+    equality)."""
+    from jacopy.algebra.derivation import Derivation, degree_of
+    from jacopy.core.symbolic_degree import Degree
+
+    lift = getattr(c, "wedge_degree", None)
+    if isinstance(lift, Degree):
+        try:
+            return lift.as_int()
+        except ValueError:
+            return None
+    if isinstance(c, Derivation):
+        return None
+    if isinstance(c, Product):
+        total = 0
+        for k in c.children:
+            kk = _wedge_degree(k, registry)
+            if kk is None:
+                return None
+            total += kk
+        return total
+    if isinstance(c, Neg):
+        return _wedge_degree(c.arg, registry)
+    try:
+        return degree_of(c, registry).as_int()
+    except ValueError:
+        return None
+
+
+class ZeroProductDefinition(Definition):
+    """``0 · x → 0`` — slot-reachable: the simplifier does not enter
+    operator argument slots, so ``Π(0·0)`` used to survive there
+    (2026-09-09 audit, finding F3)."""
+
+    name = "zero product: 0·x = 0 (slot-reachable)"
+    anchor = Product
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.expr import Integer
+
+        return isinstance(expr, Product) and any(
+            c == Integer(0) for c in expr.children
+        )
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.core.expr import Integer
+
+        return Integer(0)
+
+
 # ------------------------------------------------------------------ #
 # The two promoted wedge rules                                        #
 # ------------------------------------------------------------------ #
@@ -47,15 +103,11 @@ class WedgeGradedOrderDefinition(Definition):
         self._r = registry
 
     def _sorted(self, e: Wedge):
-        from jacopy.algebra.derivation import degree_of
         from jacopy.algorithms.normalize_alternating import _sort_key
 
         items = []
         for c in e.children:
-            try:
-                k = degree_of(c, self._r).as_int()
-            except ValueError:
-                return None
+            k = _wedge_degree(c, self._r)
             if k is None:
                 return None
             items.append((c, k))
@@ -286,6 +338,7 @@ def assemble_engine(
         report.append(f"+ {rule.name}  [{why}]")
 
     fam = scan.families
+    add(ZeroProductDefinition(), "always: zero products inside operator slots")
     if "multivector_interior" in fam:
         add(MultivectorInteriorLinearityDefinition(registry), "multivector interiors present")
         add(MultivectorInteriorDecomposableDefinition(), "multivector interiors present")
@@ -318,19 +371,17 @@ def assemble_engine(
         add(LieBracketLeibnizDefinition(registry), "Lie brackets of vector fields present")
     for rule in extra:
         add(rule, "requested by the caller")
-    _REPORTS[id(eng)] = (eng, report)
+    eng.assembly_report = report
     return eng
 
 
-#: engine id → (engine, report); ExpansionEngine uses __slots__, so
-#: the report is kept beside the engine rather than on it.
+#: Legacy name — the report now lives on the engine itself
+#: (``ExpansionEngine.assembly_report``), so nothing is registered here
+#: and no engine is kept alive by this module (2026-09-09 audit, F4).
 _REPORTS: dict = {}
 
 
 def assembly_report(engine: ExpansionEngine) -> List[str]:
     """The assembly report of an engine built by
     :func:`assemble_engine` (empty for other engines)."""
-    entry = _REPORTS.get(id(engine))
-    if entry is None or entry[0] is not engine:
-        return []
-    return list(entry[1])
+    return list(getattr(engine, "assembly_report", None) or [])

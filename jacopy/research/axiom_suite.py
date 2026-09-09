@@ -113,13 +113,21 @@ class AlgebroidData:
       components (one scalar for ``TM ⊕ T*M``; a 1-form and a 4-form
       for the exceptional bundle);
     * ``D(pairing_components) -> GeneralizedSection`` — the coboundary
-      applied to the pairing, as a section (``D⟨e₁,e₂⟩``).
+      applied to the pairing, as a section (``D⟨e₁,e₂⟩``);
+    * ``lie_R(e, pairing_components) -> tuple[Expr, ...]`` — the
+      R-VALUED Lie action ``ℒ^R_e`` on the pairing's components, for
+      the metric-invariance condition ``ℒ^R_x g(y,z) = g([x,y],z) +
+      g(y,[x,z])`` (2026-09-09 audit, F5). For a scalar pairing this
+      is the anchor's action; for the exceptional bundle the paper's
+      ``ℒ^R_{(U,ω₂,ω₅)}(r₁, r₄) = (ℒ_U r₁, ℒ_U r₄ − r₁ ∧ dω₂)`` —
+      NOT the plain ``ℒ_U`` on both components.
     """
 
     bracket: Bracket
     anchor: Callable[[GeneralizedSection], Expr]
     pairing: Optional[Callable[..., Tuple[Expr, ...]]] = None
     D: Optional[Callable[..., GeneralizedSection]] = None
+    lie_R: Optional[Callable[..., Tuple[Expr, ...]]] = None
     name: str = "E"
 
     @property
@@ -142,11 +150,16 @@ class AlgebroidData:
         D = None
         if self.D is not None:
             D = lambda *parts: inv(self.D(*parts))
+        lie_R = None
+        if self.lie_R is not None:
+            # ℒ'^R_x = ℒ^R_{Ψx}: the R-representation is unchanged
+            lie_R = lambda e, *parts: self.lie_R(psi(e), *parts)
         return AlgebroidData(
             bracket=self.bracket.twist(psi, inv),
             anchor=lambda e: self.anchor(psi(e)),
             pairing=pairing,
             D=D,
+            lie_R=lie_R,
             name=name or f"{self.name}_{psi.name}",
         )
 
@@ -227,25 +240,88 @@ class AxiomSuite:
         structures: Sequence = (),
         declare_fi: bool = False,
         extra_rules: Sequence = (),
+        expand_max_steps: int = 20000,
     ) -> None:
         from jacopy.central.objects import functions, vector_fields
 
+        self.expand_max_steps = expand_max_steps
         self.data = data
         self.registry = registry if registry is not None else PropertyRegistry()
-        if probe is None:
-            (probe,) = functions("h_probe", registry=self.registry)
+        self._probe_given = probe is not None
         self.probe = probe
         self._engine = engine
         self.structures = tuple(structures)
         self.declare_fi = declare_fi
         self.extra_rules = tuple(extra_rules)
-        top = max(
+        self._top = max(
             (s.degree for s in data.type if s.kind == "form"), default=0
         )
-        self._slots = vector_fields(
-            " ".join(f"X{_sub(i)}" for i in range(1, top + 1))
-        ) if top else ()
         self.last_engine = None
+
+    def _normalize(self, engine, node: Expr) -> Expr:
+        """Engine normal form with this suite's expansion budget (the
+        library default of 1024 rewrites is too small for the
+        rotated exceptional 4-form checks; a true cycle still trips
+        the bound, just later)."""
+        from jacopy.algorithms.product_rule import product_rule
+        from jacopy.algorithms.simplify import simplify
+
+        cur = node
+        for _ in range(12):
+            expanded, _steps = engine.expand(
+                cur, max_steps=self.expand_max_steps
+            )
+            reduced = simplify(product_rule(expanded, self.registry), self.registry)
+            if reduced == cur:
+                break
+            cur = reduced
+        return cur
+
+    # ---- fresh evaluation symbols ---------------------------------- #
+
+    @staticmethod
+    def _names_in(*exprs: Expr) -> set:
+        """Every atom display name occurring in ``exprs`` (operator
+        slots included) — the set the evaluation symbols must avoid
+        (2026-09-09 audit, finding F2: a user vector named ``X₁``
+        collided with the evaluation slot ``X₁`` and a non-zero
+        symmetric defect evaluated to 0 by repeated contraction)."""
+        from jacopy.research.engine_assembly import _walk
+
+        nodes: List[Expr] = []
+        seen: set = set()
+        for e in exprs:
+            _walk(e, seen, nodes)
+        return {n._repr_inner() for n in nodes if n.is_atom}
+
+    def _fresh_vectors(self, k: int, avoid: set):
+        from jacopy.central.objects import vector_fields
+
+        base, suffix = "ξ", ""
+        while True:
+            names = [f"{base}{_sub(i)}{suffix}" for i in range(1, k + 1)]
+            if not any(n in avoid for n in names):
+                return vector_fields(" ".join(names)) if k else ()
+            suffix += "′"
+
+    def _fresh_probe(self, avoid: set) -> Expr:
+        from jacopy.central.objects import functions
+
+        if self._probe_given:
+            if self.probe._repr_inner() in avoid:
+                raise ValueError(
+                    f"the probe function {self.probe._repr_inner()!r} "
+                    "occurs in the expression being checked — a "
+                    "vector-valued identity evaluated on a symbol it "
+                    "contains is not a faithful test; pass an "
+                    "independent probe"
+                )
+            return self.probe
+        name, suffix = "ħ", ""
+        while f"{name}{suffix}" in avoid:
+            suffix += "′"
+        (probe,) = functions(f"{name}{suffix}", registry=self.registry)
+        return probe
 
     @property
     def last_report(self) -> List[str]:
@@ -271,19 +347,23 @@ class AxiomSuite:
         self.last_engine = eng
         return eng
 
-    def _evaluate(self, comp: Expr, slot) -> Expr:
-        """The scalar/evaluated face of one component."""
+    def _evaluate(self, comp: Expr, slot, *, avoid: Optional[set] = None) -> Expr:
+        """The scalar/evaluated face of one component, on evaluation
+        symbols FRESH with respect to ``comp`` (names not occurring in
+        it)."""
+        avoid = self._names_in(comp) if avoid is None else avoid
         if slot.kind == "vector":
-            return Act(comp, self.probe)
+            return Act(comp, self._fresh_probe(avoid))
         if slot.kind == "function":
             return comp
         k = slot.degree
         if k == 0:
             return comp
+        slots = self._fresh_vectors(k, avoid)
         if k == 1:
-            return Pairing(comp, self._slots[0])
+            return Pairing(comp, slots[0])
         return MultiEval(
-            comp, *self._slots[:k], alternating=True, slot_kind="vector"
+            comp, *slots, alternating=True, slot_kind="vector"
         )
 
     def _zero_by_components(
@@ -296,7 +376,7 @@ class AxiomSuite:
             node = self._evaluate(comp, slot)
             eng = self.engine_for(node)
             t = time.time()
-            residual = _normalized_by(eng, node, self.registry)
+            residual = self._normalize(eng, node)
             ok = residual == Integer(0)
             rep.results.append(
                 CheckResult(
@@ -335,6 +415,47 @@ class AxiomSuite:
         )
         return self._zero_by_components("symmetric part", diff)
 
+    def metric_invariance(
+        self,
+        e1: GeneralizedSection,
+        e2: GeneralizedSection,
+        e3: GeneralizedSection,
+    ) -> SuiteReport:
+        """``ℒ^R_{e₁} g(e₂,e₃) = g([e₁,e₂], e₃) + g(e₂, [e₁,e₃])`` —
+        the metric-invariance condition with the R-VALUED action
+        ``lie_R`` of the data, checked per pairing component (a
+        scalar component directly, a ``k``-form component on ``k``
+        fresh vector slots)."""
+        from jacopy.packages.poisson.tilde import _normalized_by
+        from jacopy.research.sections import Slot
+
+        if self.data.pairing is None or self.data.lie_R is None:
+            raise ValueError("metric invariance needs a pairing and lie_R")
+        br, g, LR = self.data.bracket, self.data.pairing, self.data.lie_R
+        lhs = LR(e1, *g(e2, e3))
+        r1 = g(br(e1, e2), e3)
+        r2 = g(e2, br(e1, e3))
+        rep = SuiteReport("metric invariance")
+        for i, (l, a, b) in enumerate(zip(lhs, r1, r2)):
+            comp = Sum(l, Neg(a), Neg(b))
+            k = _form_degree(comp, self.registry)
+            slot = Slot("function") if not k else Slot("form", k, f"pairing component {i + 1} ({k}-form)")
+            node = self._evaluate(comp, slot)
+            eng = self.engine_for(node)
+            t = time.time()
+            residual = self._normalize(eng, node)
+            ok = residual == Integer(0)
+            rep.results.append(
+                CheckResult(
+                    "metric invariance",
+                    slot.label if k else f"pairing component {i + 1} (scalar)",
+                    "CLOSED" if ok else "RESIDUAL",
+                    time.time() - t,
+                    residual=None if ok else residual,
+                )
+            )
+        return rep
+
     def anchor_morphism(
         self, e1: GeneralizedSection, e2: GeneralizedSection
     ) -> SuiteReport:
@@ -344,13 +465,11 @@ class AxiomSuite:
         from jacopy.packages.poisson.tilde import _normalized_by
 
         br, rho = self.data.bracket, self.data.anchor
-        node = Act(
-            Sum(rho(br(e1, e2)), Neg(lie_bracket(rho(e1), rho(e2)))),
-            self.probe,
-        )
+        body = Sum(rho(br(e1, e2)), Neg(lie_bracket(rho(e1), rho(e2))))
+        node = Act(body, self._fresh_probe(self._names_in(body)))
         eng = self.engine_for(node)
         t = time.time()
-        residual = _normalized_by(eng, node, self.registry)
+        residual = self._normalize(eng, node)
         ok = residual == Integer(0)
         rep = SuiteReport("anchor morphism")
         rep.results.append(
@@ -387,14 +506,15 @@ class AxiomSuite:
         for i, (comp, slot) in enumerate(zip(diff, diff.type)):
             if components is not None and i not in components:
                 continue
-            node = self._evaluate(comp, slot)
+            avoid = self._names_in(comp)
+            node = self._evaluate(comp, slot, avoid=avoid)
             eng = self.engine_for(node)
             t = time.time()
             try:
                 chain, _ = prove_with_bracket_identities(
                     node,
                     Integer(0),
-                    self.probe,
+                    self._fresh_probe(avoid),
                     registry=self.registry,
                     engine=eng,
                     max_steps=max_steps,
@@ -423,16 +543,37 @@ class AxiomSuite:
         e3: Optional[GeneralizedSection] = None,
         jacobi_max_steps: int = 20000,
     ) -> SuiteReport:
-        """Right-Leibniz + symmetric part (if pairing/D given) +
-        anchor morphism (+ Jacobi when ``e3`` is given)."""
+        """The Courant-type conditions this suite knows: right-Leibniz,
+        symmetric part (if pairing/D given), anchor morphism, and —
+        when ``e3`` is given — metric invariance (if ``lie_R`` given)
+        and Leibniz–Jacobi. It is NOT every calculus/compatibility
+        condition of a Drinfel'd double (the Appendix-D families are
+        separate provers); the report title says what ran."""
         rep = SuiteReport(f"axiom suite for {self.data.name} on {self.data.type}")
         rep.extend(self.right_leibniz(e1, e2, f))
         if self.data.pairing is not None and self.data.D is not None:
             rep.extend(self.symmetric_part(e1, e2))
         rep.extend(self.anchor_morphism(e1, e2))
         if e3 is not None:
+            if self.data.pairing is not None and self.data.lie_R is not None:
+                rep.extend(self.metric_invariance(e1, e2, e3))
             rep.extend(self.jacobi(e1, e2, e3, max_steps=jacobi_max_steps))
         return rep
+
+
+def _form_degree(expr: Expr, registry) -> int:
+    """Concrete form degree of ``expr`` (0 for scalars); raises when
+    undeterminable — a pairing component must have a known degree."""
+    from jacopy.algebra.derivation import degree_of
+
+    try:
+        k = degree_of(expr, registry).as_int()
+    except ValueError as exc:
+        raise ValueError(
+            "pairing component of undeterminable degree: "
+            + expr._repr_inner()[:80]
+        ) from exc
+    return k or 0
 
 
 def _sub(n: int) -> str:

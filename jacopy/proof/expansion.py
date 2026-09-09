@@ -174,7 +174,13 @@ class ExpansionEngine:
       exposing the derivation down to axioms.
     """
 
-    __slots__ = ("_definitions", "_mode", "_index", "_unanchored")
+    __slots__ = (
+        "_definitions",
+        "_mode",
+        "_index",
+        "_unanchored",
+        "assembly_report",
+    )
 
     def __init__(
         self,
@@ -186,6 +192,11 @@ class ExpansionEngine:
             raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
         self._definitions: List[Definition] = []
         self._mode = mode
+        # Filled by jacopy.research.engine_assembly.assemble_engine:
+        # one line per detected family / added rule. Lives ON the
+        # engine so no side registry keeps discarded engines alive
+        # (2026-09-09 audit, finding F4).
+        self.assembly_report: List[str] = []
         # Dispatch index: Expr class -> [(registration order, rule)].
         # Rules without an anchor stay in the always-consulted fallback
         # list. Registration order is preserved across both so the

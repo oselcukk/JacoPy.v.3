@@ -296,3 +296,91 @@ def test_exceptional_jacobi_five_closes_in_full():
     )
     assert len(chain.steps) > 100          # the Dorfman leg is proven, not cited
     assert "CITED" not in " ".join(assumptions)
+
+
+# ---- 2026-09-09 audit pins (F1-F4) ------------------------------- #
+
+
+def test_vector_wedge_is_not_proved_commutative():
+    from jacopy.core.wedge import Wedge
+    from jacopy.proof import show_equal
+    from jacopy.proof.strategies import ProofFailure
+
+    reg = PropertyRegistry()
+    X, Y = vector_fields("X Y")
+    lhs, rhs = Wedge(Y, X), Wedge(X, Y)
+    with pytest.raises(ProofFailure):
+        show_equal(lhs, rhs, registry=reg, engine=assemble_engine(lhs, rhs, registry=reg))
+    a, b = forms("a b", degree=1)
+    eng = assemble_engine(Wedge(b, a), registry=reg)
+    assert _normalized_by(eng, Sum(Wedge(b, a), Wedge(a, b)), reg) == Integer(0)
+
+
+def test_suite_evaluation_symbols_are_fresh():
+    from jacopy.algebra.derivation import Act
+    from jacopy.core.pairing import Pairing
+    from jacopy.central.objects.interior import Interior
+
+    reg = PropertyRegistry()
+    (X,) = vector_fields("ξ₁")                      # the suite's own slot name
+    (tau,) = forms("tau", degree=3)
+    (alpha,) = forms("alpha", degree=2)
+    (s,) = forms("s", degree=1)
+    T = SectionType.generalized_tangent(2)
+    data = AlgebroidData(
+        bracket=Bracket(T, lambda u, v: T.section(
+            Integer(0), Product(Pairing(s, u[0]), Pairing(s, v[0]), Act(Interior(X), tau)))),
+        anchor=lambda e: Integer(0),
+        pairing=lambda u, v: (Integer(0),),
+        D=lambda p: T.zero(),
+    )
+    e = T.section(X, alpha)
+    assert not AxiomSuite(data, registry=reg).symmetric_part(e, e).all_closed
+    # a user-supplied probe that occurs in the checked expression is refused
+    (fs,) = functions("fs", registry=reg)
+    with pytest.raises(ValueError, match="probe"):
+        AxiomSuite(data, registry=reg, probe=fs)._fresh_probe({"fs"})
+
+
+def test_zero_products_vanish_inside_sharp_slots():
+    reg = PropertyRegistry()
+    N = nambu_structure("P", p=2)
+    node = N.sharp_vf(Product(Integer(0), Integer(0)))
+    assert _normalized_by(assemble_engine(node, registry=reg, structures=(N,)), node, reg) == Integer(0)
+
+
+def test_assembly_report_lives_on_the_engine():
+    import gc, weakref
+
+    from jacopy.research.engine_assembly import _REPORTS
+
+    eng = assemble_engine(Integer(0))
+    assert assembly_report(eng) and eng.assembly_report == assembly_report(eng)
+    assert not _REPORTS
+
+
+def test_metric_invariance_needs_the_r_valued_action_on_the_exceptional_bundle():
+    from jacopy.core.wedge import Wedge
+    from jacopy.algebra.derivation import Act
+    from jacopy.central.tangent.cartan import L as Lie
+
+    reg = PropertyRegistry()
+    U, V, W = vector_fields("U V W")
+    om2, et2, ze2 = forms("ω₂ η₂ ζ₂", degree=2)
+    om5, et5, ze5 = forms("ω₅ η₅ ζ₅", degree=5)
+    N3, N6 = nambu_structure("Π₃", p=2), nambu_structure("Π₆", p=5)
+    T3 = SectionType.exceptional()
+    pairing = lambda a, b: (exceptional_pairing_two(a[0], a[1], b[0], b[1]), exceptional_pairing_five(*a, *b))
+    good = AlgebroidData(
+        bracket=Bracket.from_components(T3, exceptional_courant_bracket), anchor=lambda e: e[0],
+        pairing=pairing, D=lambda p2, p5: T3.section(Integer(0), d(p2), d(p5)),
+        lie_R=lambda e, r1, r4: (Lie(e[0], r1), Sum(Lie(e[0], r4), Neg(Wedge(r1, d(e[1]))))),
+    )
+    naive = AlgebroidData(
+        bracket=good.bracket, anchor=good.anchor, pairing=pairing, D=good.D,
+        lie_R=lambda e, r1, r4: (Lie(e[0], r1), Lie(e[0], r4)),     # plain ℒ_U on both: wrong
+    )
+    x1, x2, x3 = T3.section(U, om2, om5), T3.section(V, et2, et5), T3.section(W, ze2, ze5)
+    assert AxiomSuite(good, registry=reg, structures=(N3, N6)).metric_invariance(x1, x2, x3).all_closed
+    rep = AxiomSuite(naive, registry=reg, structures=(N3, N6)).metric_invariance(x1, x2, x3)
+    assert not rep.all_closed and rep.results[1].residual is not None
