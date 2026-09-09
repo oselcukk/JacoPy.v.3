@@ -170,6 +170,12 @@ def _expand_act(
     from jacopy.core.wedge import Wedge as _Wedge
 
     if isinstance(arg, _Wedge):
+        if getattr(op, "leibniz", True) is False:
+            # the LINEAR-ONLY guard applies to the wedge path too:
+            # ι_P (p ≥ 2) over α∧β is NOT a graded Leibniz split
+            # (2026-09-09 catch: the Product branch was guarded, the
+            # Wedge branch was not — ι_{Π₃}(η₂∧dω₂) was being split).
+            return Act(op, arg)
         # Graded Leibniz over the WEDGE product (the wedge is the
         # graded product of forms — Phase 5.E.4):
         # D(α∧β) = D(α)∧β + (−1)^{|D||α|} α∧D(β) + …
