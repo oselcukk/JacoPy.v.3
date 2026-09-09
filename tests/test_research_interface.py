@@ -240,9 +240,49 @@ def test_exceptional_jacobi_five_splits_and_cross_part_closes():
     rules = [s.rule for s in chain.steps]
     assert any("linear split" in r for r in rules)
     assert any("cross Jacobiator" in r for r in rules)
-    assert assumptions == ("Dorfman Leibniz-Jacobi at p = 5 (CITED)",)
+    assert "CITED" in assumptions[0]
 
 
+@pytest.mark.parametrize("p", [2, 4])
+def test_top_slot_jacobi_closes_for_even_p(p):
+    # the family TM ⊕ Λᵖ ⊕ Λ^{2p+1}: split identity and cross part close
+    # at form level for EVEN p (the Dorfman leg is cited here)
+    from jacopy.packages.drinfeld.examples import prove_top_slot_jacobi
+
+    reg = PropertyRegistry()
+    U, V, W = vector_fields("U V W")
+    a, b, c = forms("α β γ", degree=p)
+    A, B, C = forms("A B C", degree=2 * p + 1)
+    slots = vector_fields(" ".join(f"Y{i}" for i in range(2 * p + 1)))
+    N = nambu_structure("Π", p=p)
+    chain, assumptions = prove_top_slot_jacobi(
+        N, U, a, A, V, b, B, W, c, C, slots, registry=reg, cite_dorfman=True
+    )
+    assert [s.rule.split(" (")[0] for s in chain.steps[:2]] == [
+        "top-slot Jacobiator = Dorfman Jacobiator + cross Jacobiator",
+        "cross Jacobiator normalizes to 0",
+    ]
+
+
+@pytest.mark.parametrize("p", [1, 3])
+def test_top_slot_jacobi_obstructed_for_odd_p(p):
+    # for ODD p the single cross-term bracket is NOT Leibniz: the cross
+    # Jacobiator is ∓2·dη_p ∧ ι_W dω_p (independently confirmed by brute
+    # force on 3 slots at p = 1) — the prover fails honestly
+    from jacopy.packages.drinfeld.examples import prove_top_slot_jacobi
+    from jacopy.proof.strategies import ProofFailure
+
+    reg = PropertyRegistry()
+    U, V, W = vector_fields("U V W")
+    a, b, c = forms("α β γ", degree=p)
+    A, B, C = forms("A B C", degree=2 * p + 1)
+    slots = vector_fields(" ".join(f"Y{i}" for i in range(2 * p + 1)))
+    N = nambu_structure("Π", p=p)
+    with pytest.raises(ProofFailure, match="cross Jacobiator") as info:
+        prove_top_slot_jacobi(
+            N, U, a, A, V, b, B, W, c, C, slots, registry=reg, cite_dorfman=True
+        )
+    assert "ι_W" in str(info.value)
 @pytest.mark.skipif(
     not __import__("os").environ.get("JACOPY_RUN_SLOW"),
     reason="~35 s closure; set JACOPY_RUN_SLOW=1 to run",

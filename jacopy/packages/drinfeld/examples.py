@@ -405,7 +405,7 @@ def _exceptional_cross(x2: Expr, y2: Expr) -> Expr:
     return Neg(Wedge(y2, d(x2)))
 
 
-def prove_exceptional_jacobi_five(
+def prove_top_slot_jacobi(
     N,
     U: Expr,
     om2: Expr,
@@ -416,37 +416,54 @@ def prove_exceptional_jacobi_five(
     W: Expr,
     ze2: Expr,
     ze5: Expr,
-    slots5,
+    slots_top,
     *,
     registry: Optional[PropertyRegistry] = None,
     cite_dorfman: bool = False,
     max_steps: int = 60000,
 ) -> Tuple[ProofChain, Tuple[str, ...]]:
-    """The 5-form component of the Leibniz–Jacobi identity of the
-    exceptional Courant bracket,
+    """The TOP-slot component of the Leibniz–Jacobi identity for the
+    whole family ``TM ⊕ Λᵖ ⊕ Λ^{2p+1}`` with the Dorfman formula on
+    both form slots and the cross-term ``C(x, y) = −y_p ∧ dx_p``
+    landing in the top slot (the E₆ exceptional bracket is ``p = 2``:
+    ``Λ² ⊕ Λ⁵``; ``p = 1`` is ``Λ¹ ⊕ Λ³``, and so on — the bracket
+    formula :func:`exceptional_courant_bracket` is degree-agnostic,
+    only the number of evaluation slots ``2p+1`` changes):
 
-        [x,[y,z]]₅ − [[x,y],z]₅ − [y,[x,z]]₅ = 0,
+        [x,[y,z]]_top − [[x,y],z]_top − [y,[x,z]]_top = 0.
 
-    closed by LINEARITY instead of brute force (2026-09-09): the
-    brute 5-slot expansion of three nested brackets does not finish
-    (>900 s), but the bracket's 5-form slot is ``L(x, y₅) + C(x₂, y₂)``
-    with ``L`` the Dorfman formula and ``C`` the cross-term, so the
-    Jacobiator splits EXACTLY as
+    Closed by LINEARITY instead of brute force (2026-09-09): the brute
+    ``(2p+1)``-slot expansion of three nested brackets does not finish
+    at ``p = 2`` (>900 s), but the top slot is ``L(x, y_top) +
+    C(x_p, y_p)`` with ``L`` the Dorfman formula, so the Jacobiator
+    splits EXACTLY as
 
-        J₅ = J₅^{Dorfman}(U,ω₅; V,η₅; W,ζ₅) + J₅^{cross}(ω₂,η₂,ζ₂; U,V,W),
+        J_top = J^{Dorfman}(U,ω_top; V,η_top; W,ζ_top)
+              + J^{cross}(ω_p, η_p, ζ_p; U, V, W),
 
-    where ``J₅^{cross} = ℒ_U C(y,z) + C(x₂,[y,z]₂) − C([x,y]₂,z₂)
-    + ι_W dC(x,y) − ℒ_V C(x,z) − C(y₂,[x,z]₂)``. Three legs:
+    ``J^{cross} = ℒ_U C(y,z) + C(x_p,[y,z]_p) − C([x,y]_p,z_p)
+    + ι_W dC(x,y) − ℒ_V C(x,z) − C(y_p,[x,z]_p)``. Three legs:
 
     1. the split identity, at FORM level (no slot evaluation);
-    2. ``J₅^{cross} = 0``, at FORM level (graded Leibniz of ``ℒ``,
-       ``ι``, ``d`` over the wedge + the 2-form Dorfman bracket);
-    3. ``J₅^{Dorfman} = 0`` — the degree-general Dorfman Leibniz–Jacobi
-       theorem (6.C), PROVEN here on the 5 slots (~30 s) unless
-       ``cite_dorfman=True``, in which case it is recorded as a cited
-       library theorem (the slow test suite proves it).
+    2. ``J^{cross} = 0``, at FORM level (graded Leibniz of ``ℒ``, ``ι``,
+       ``d`` over the wedge + the degree-``p`` Dorfman bracket);
+    3. ``J^{Dorfman} = 0`` — the degree-general Dorfman Leibniz–Jacobi
+       theorem (6.C), PROVEN here on the ``2p+1`` slots (~30 s at
+       ``p = 2``) unless ``cite_dorfman=True``, in which case it is
+       recorded as a cited library theorem (the slow test suite proves
+       the ``p = 2`` instance).
 
-    Returns the chain and the tuple of assumption labels."""
+    Legs 1 and 2 are cheap for every ``p``; the arguments are named
+    after the ``p = 2`` case for readability.
+
+    PARITY (2026-09-09, found by asking "why five?"): the single
+    cross-term bracket is a Leibniz bracket for EVEN ``p`` only. For
+    odd ``p`` the cross Jacobiator is ``∓2·dη_p ∧ ι_W dω_p`` for every
+    sign/order convention of the cross-term (and for its symmetrised
+    variants), and an independent brute-force expansion on three slots
+    at ``p = 1`` confirms the non-zero residual — so this prover fails
+    HONESTLY there with that residual in the message. Returns the chain
+    and the tuple of assumption labels."""
     from jacopy.proof.step import ProofStep
     from jacopy.packages.drinfeld.double import (
         dorfman_double,
@@ -486,13 +503,13 @@ def prove_exceptional_jacobi_five(
     split = Sum(J_exc, Neg(J_dorf), Neg(J_cross))
     eng = assemble_engine(split, registry=registry, structures=(N,))
     for label, node in (
-        ("5-form Jacobiator = Dorfman Jacobiator + cross Jacobiator (linear split)", split),
+        ("top-slot Jacobiator = Dorfman Jacobiator + cross Jacobiator (linear split)", split),
         ("cross Jacobiator normalizes to 0 (form level)", J_cross),
     ):
         nf = _normalized_by(eng, node, registry)
         if nf != Integer(0):
             raise ProofFailure(
-                f"exceptional 5-form Jacobi: {label} FAILS — residual "
+                f"top-slot Jacobi: {label} FAILS — residual "
                 + nf._repr_inner()[:160]
             )
         steps.append(
@@ -503,20 +520,27 @@ def prove_exceptional_jacobi_five(
             ProofStep(
                 J_dorf,
                 Integer(0),
-                rule="Dorfman 5-form Leibniz-Jacobi (cited library theorem, 6.C)",
+                rule="Dorfman top-slot Leibniz-Jacobi (cited library theorem, 6.C)",
                 justification="cited: prove_dorfman_jacobi_form, degree-general",
                 provenance_tag="theorem",
             )
         )
-        assumptions = ("Dorfman Leibniz-Jacobi at p = 5 (CITED)",)
+        assumptions = ("Dorfman Leibniz-Jacobi on the top slot (CITED, 6.C degree-general)",)
     else:
         chain_d, used = prove_dorfman_jacobi_form(
-            U, om5, V, et5, W, ze5, _probe(registry), slots5,
+            U, om5, V, et5, W, ze5, _probe(registry), slots_top,
             registry=registry, max_steps=max_steps,
         )
         steps.extend(chain_d.steps)
         assumptions = tuple(t.name for t in used)
     return ProofChain(steps), assumptions
+
+
+def prove_exceptional_jacobi_five(*args, **kwargs):
+    """The ``p = 2`` (E₆, ``Λ² ⊕ Λ⁵``) instance of
+    :func:`prove_top_slot_jacobi` — the 5-form slot of the exceptional
+    Courant bracket's Leibniz–Jacobi identity."""
+    return prove_top_slot_jacobi(*args, **kwargs)
 
 
 def _probe(registry):
