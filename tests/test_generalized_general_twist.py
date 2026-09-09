@@ -27,7 +27,17 @@ from jacopy.proof.strategies import ProofFailure
 def setup():
     reg = PropertyRegistry()
     (f,) = functions("f", registry=reg)
-    E = algebroid("E", declare=("right-leibniz",))
+    # The transports CITE initial-bracket axioms, so the context
+    # must genuinely declare them (2026-09-09 audit, finding 1).
+    E = algebroid(
+        "E",
+        declare=(
+            "right-leibniz",
+            "jacobi",
+            "symmetric-part",
+            "metric-invariance",
+        ),
+    )
     u, v, w = E.sections("u v w")
     return reg, f, E, u, v, w
 
@@ -52,9 +62,40 @@ def test_twist_transports_right_leibniz_with_primed_anchor(setup):
 
 
 def test_twist_transports_jacobi(setup):
+    from jacopy.core.expr import Integer, Neg, Sum
+    from jacopy.packages.generalized.general_twist import (
+        twisted_bracket,
+    )
+
     reg, f, E, u, v, w = setup
     chain, thm = prove_general_twist_jacobi(E, u, v, w, registry=reg)
     assert "Leibniz-Jacobi transports" in thm.statement
+    # The RECORDED equation is the advertised twisted Jacobiator
+    # itself (finding 6), reusable by TheoremDefinition.
+    br = lambda a, b: twisted_bracket(E, a, b)
+    assert thm.lhs == Sum(
+        br(u, br(v, w)),
+        Neg(br(br(u, v), w)),
+        Neg(br(v, br(u, w))),
+    )
+    assert thm.rhs == Integer(0)
+    assert len(chain.steps) == 2
+
+
+def test_jacobi_without_declaration_is_conditional(setup):
+    from jacopy.core.expr import Integer
+
+    reg, f, E, u, v, w = setup
+    E2 = algebroid("E_rl", declare=("right-leibniz",))
+    a, b, c = E2.sections("a b c")
+    chain, thm = prove_general_twist_jacobi(
+        E2, a, b, c, registry=reg
+    )
+    # No declared jacobi: only the structural identity is
+    # recorded — rhs is the Ψ⁻¹-instance, NOT zero.
+    assert thm.rhs != Integer(0)
+    assert "STRUCTURAL identity only" in thm.statement
+    assert "NOT established here" in thm.statement
 
 
 def test_twist_transports_bourbaki_data(setup):
@@ -77,6 +118,22 @@ def test_right_leibniz_transport_needs_the_initial_axiom(setup):
     a, b = bare.sections("a b")
     with pytest.raises(ProofFailure):
         prove_general_twist_right_leibniz(bare, a, b, f, registry=reg)
+
+
+def test_cited_transports_need_their_initial_axioms(setup):
+    reg, f, E, u, v, w = setup
+    bare = algebroid("bare_E")
+    a, b, c = bare.sections("a b c")
+    with pytest.raises(ProofFailure):
+        prove_general_twist_jacobi(bare, a, b, c, registry=reg)
+    with pytest.raises(ProofFailure):
+        prove_general_twist_symmetric_part(
+            bare, a, b, registry=reg
+        )
+    with pytest.raises(ProofFailure):
+        prove_general_twist_invariance(
+            bare, a, b, c, registry=reg
+        )
 
 
 # ---- 13k: independent A/Z data ------------------------------------ #

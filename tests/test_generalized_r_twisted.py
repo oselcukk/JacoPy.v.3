@@ -17,7 +17,7 @@ from jacopy.packages.generalized.poisson_generalized import (
 )
 from jacopy.packages.generalized.r_twisted import (
     prove_derived_r_vanishes_under_poisson,
-    prove_r_anchor_defect,
+    prove_r_twisted_anchor_morphism,
     prove_r_twisted_courant_relation,
     prove_r_twisted_right_leibniz,
     prove_r_twisted_symmetric_part,
@@ -66,14 +66,26 @@ def test_r_twisted_symmetric_part_c4(setup):
     assert "does not change D_θ" in thm.statement
 
 
-def test_r_anchor_defect_is_exactly_the_r_term(setup):
-    # The structural theorem: the R-flux breaks the anchor morphism
-    # by exactly ι̃_η ι̃_ω R (quasi-Courant picture).
+def test_r_term_is_in_the_anchor_kernel(setup):
+    # Corrected structural theorem (2026-09-09 audit, finding 2):
+    # the vector-valued R-term lies in ker ρ (the (2.6) anchor
+    # reads only the form slot), so the anchor morphism SURVIVES
+    # the R-twist — as in Watamura §3.
     reg, f, h, om, et, U, V, N, R = setup
-    chain = prove_r_anchor_defect(
+    chain = prove_r_twisted_anchor_morphism(
         N, R, U, om, V, et, h, registry=reg
     )
-    assert len(chain.steps) > 20
+    assert chain.steps
+
+
+def test_r_twisted_anchor_morphism_needs_poisson(setup):
+    reg, f, h, om, et, U, V, N, R = setup
+    with pytest.raises(ProofFailure):
+        prove_r_twisted_anchor_morphism(
+            N, R, U, om, V, et, h,
+            registry=reg,
+            declare_poisson=False,
+        )
 
 
 def test_derived_r_vanishes_under_poisson(setup):

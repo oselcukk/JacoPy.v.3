@@ -67,35 +67,54 @@ def test_theta_d_pairing_is_half_anchor(setup):
 
 
 def test_theta_right_leibniz_c3_at_p1(setup):
-    # [C'3] — the 6.D theorem instantiated at p = 1 (any bivector).
-    from jacopy.packages.drinfeld.double import (
-        prove_nambu_double_right_leibniz_form,
-        prove_nambu_double_right_leibniz_vec,
+    # [C'3] for the (2.6)-(2.7) structure itself, with
+    # ρ(x)f = (θ♯ω)(f) (2026-09-09 audit, finding 2).
+    from jacopy.packages.generalized.poisson_generalized import (
+        prove_theta_right_leibniz,
     )
 
     reg, f, h, om, et, ze, U, V, W, X, N = setup
-    assert prove_nambu_double_right_leibniz_form(
-        N, U, om, V, et, f, (X,), registry=reg
-    ).steps
-    assert prove_nambu_double_right_leibniz_vec(
-        N, U, om, V, et, f, ze, registry=reg
-    ).steps
+    chain, thm = prove_theta_right_leibniz(
+        N, U, om, V, et, f, registry=reg
+    )
+    assert "[C'3]" in thm.statement
+    assert len(chain.steps) == 2
 
 
 def test_theta_symmetric_part_c4_at_p1(setup):
-    # [C'4] — the 6.D symmetric part (𝒟 = d + d̃) at p = 1.
-    from jacopy.packages.drinfeld.double import (
-        prove_nambu_double_symmetric_part_form,
-        prove_nambu_double_symmetric_part_vec,
+    # [C'4] for the (2.6)-(2.7) structure: sym = 2·D_θ⟨x,y⟩₊ with
+    # D_θ = ½(−θ♯dh, 0).
+    from jacopy.packages.generalized.poisson_generalized import (
+        prove_theta_symmetric_part,
     )
 
     reg, f, h, om, et, ze, U, V, W, X, N = setup
-    assert prove_nambu_double_symmetric_part_form(
-        N, U, om, V, et, (X,), registry=reg
-    ).steps
-    assert prove_nambu_double_symmetric_part_vec(
-        N, U, om, V, et, ze, registry=reg
-    ).steps
+    chain, thm = prove_theta_symmetric_part(
+        N, U, om, V, et, registry=reg
+    )
+    assert "[C'4]" in thm.statement
+    assert len(chain.steps) == 2
+
+
+def test_theta_structure_is_watamura_not_triangular(setup):
+    # The audit's defining checks (arXiv:1408.2649 (2.6)-(2.7)):
+    # the anchor KILLS pure vectors and the bracket of two pure
+    # vectors is ZERO.
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _tilde_engine,
+    )
+    from jacopy.packages.poisson.tilde import _normalized_by
+
+    reg, f, h, om, et, ze, U, V, W, X, N = setup
+    eng = _tilde_engine(N, reg, declare_fi=False)
+    assert _normalized_by(
+        eng, theta_anchor(N, U, Integer(0)), reg
+    ) == Integer(0)
+    vec, form = theta_dorfman(
+        N, U, Integer(0), V, Integer(0)
+    )
+    assert _normalized_by(eng, vec, reg) == Integer(0)
+    assert _normalized_by(eng, form, reg) == Integer(0)
 
 
 def test_theta_invariance_c5_closes(setup):

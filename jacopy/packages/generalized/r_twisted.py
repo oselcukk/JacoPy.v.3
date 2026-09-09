@@ -15,15 +15,17 @@ interiors are odd, degree −1), so exactly as for ``H``:
 * [C'4] symmetric part — the R-term drops out; ``D_θ`` is UNCHANGED,
 * the twist commutes with skew-symmetrization (Courant relation).
 
-The structural DIFFERENCE from the H-twist: the R-term is
-VECTOR-valued, so the total anchor sees it — the anchor-morphism
-defect of the R-twisted bracket is EXACTLY the R-term
-(:func:`prove_r_anchor_defect`); a non-zero R breaks the Courant
-axioms in the anchor/Jacobi family (Watamura's quasi-Courant
-picture), while the DERIVED twist ``R′ = [θ♯·,θ♯·] − θ♯[·,·]_θ``
-vanishes under the declared Poisson condition
-(:func:`prove_derived_r_vanishes_under_poisson`) — recovering the
-untwisted structure.
+The structural picture (corrected — 2026-09-09 audit, finding 2):
+the R-term is VECTOR-valued, and the (2.6) anchor
+``ρ(U+ω) = θ♯ω`` reads ONLY the form slot — so the R-term lands in
+``ker ρ`` and the anchor morphism is UNTOUCHED by the R-flux
+(:func:`prove_r_twisted_anchor_morphism`; Watamura §3 constructs
+the R-twist to preserve the Courant structure under ``d_θR = 0``).
+The DERIVED twist ``R′ = [θ♯·,θ♯·] − θ♯[·,·]_θ`` vanishes under
+the declared Poisson condition
+(:func:`prove_derived_r_vanishes_under_poisson`) — the R-flux of a
+genuine Poisson structure is an independent datum, not the derived
+one.
 
 The tilde-interior structure rules
 (:class:`TildeInteriorFormLinearityDefinition`,
@@ -362,7 +364,7 @@ def prove_r_twisted_symmetric_part(
     )
 
 
-def prove_r_anchor_defect(
+def prove_r_twisted_anchor_morphism(
     N: NambuPoissonStructure,
     R: Expr,
     U: Expr,
@@ -375,28 +377,32 @@ def prove_r_anchor_defect(
     declare_poisson: bool = True,
     max_steps: int = 60000,
 ) -> ProofChain:
-    """THE structural theorem of the R-flux: the anchor-morphism
-    defect of the R-twisted bracket is EXACTLY the R-term,
+    """THE structural theorem of the R-flux (corrected — 2026-09-09
+    audit, finding 2): the R-term lands in ``ker ρ``, so the anchor
+    morphism SURVIVES the R-twist,
 
-        ρ([x,y]_{D,θ,R}) − [ρ(x), ρ(y)]_Lie = ι̃_η ι̃_ω R
+        ρ([x,y]_{D,θ,R}) = [ρ(x), ρ(y)]_Lie
 
-    (probed on ``h``; the θ-part closes by the 6.I.4 capstone under
-    the declared Poisson condition). A non-zero R therefore breaks
-    the Courant anchor axiom — Watamura's quasi-Courant picture —
-    while ``R = 0`` recovers the generalized-geometry double."""
+    (probed on ``h``). The (2.6) anchor ``ρ(U+ω) = θ♯ω`` reads only
+    the form slot, the vector-valued R-term never enters it, and
+    what remains is the untwisted [C'2] — ``θ♯`` as a Koszul-to-Lie
+    morphism under the declared Poisson condition (honest-fail
+    without). This matches Watamura §3: the R-twist is built to
+    PRESERVE the Courant structure (with ``d_θR = 0`` for the
+    Jacobi family — an earlier revision wrongly reported the defect
+    as the R-term, an artifact of the triangular total anchor)."""
     from jacopy.proof.strategies import ExpandAndSimplify
 
     _require_poisson(N)
     vec, form = r_twisted_theta_dorfman(
         N, R, U, omega, V, eta
     )
-    lhs = Sum(vec, N.sharp_vf(form))
-    rhs = Sum(
-        lie_bracket(
-            theta_anchor(N, U, omega),
-            theta_anchor(N, V, eta),
-        ),
-        r_term(R, omega, eta),
+    # the anchor of the R-twisted result: the FORM slot only —
+    # the R-term (in `vec`) is annihilated structurally.
+    lhs = theta_anchor(N, vec, form)
+    rhs = lie_bracket(
+        theta_anchor(N, U, omega),
+        theta_anchor(N, V, eta),
     )
     node = Act(Sum(lhs, Neg(rhs)), h)
     engine = _engine(

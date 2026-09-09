@@ -105,14 +105,36 @@ class ChiSec(_SlotAtom):
 
 class SplitAnchorDefinition(Definition):
     """Exactness + splitting on the anchor: ``ρ(φU) → U`` and
-    ``ρ(χz) → 0`` (8.5)."""
+    ``ρ(χz) → 0`` (8.5).
 
-    name = "exact splitting anchors: ρ∘φ = id, ρ∘χ = 0 (8.5)"
+    The splitting data belongs to ONE structure: when constructed
+    with an ``algebroid_name`` the rule fires only on THAT
+    algebroid's anchor — a foreign anchor applied to a φ/χ atom
+    stays symbolic instead of inheriting the splitting equations
+    (2026-09-09 audit, finding 5)."""
+
     anchor = AnchoredVF
 
+    def __init__(
+        self, algebroid_name: Optional[str] = None
+    ) -> None:
+        self._alg = algebroid_name
+        scope = (
+            "any" if algebroid_name is None else algebroid_name
+        )
+        self.name = (
+            "exact splitting anchors: ρ∘φ = id, ρ∘χ = 0 "
+            f"(8.5; algebroid {scope})"
+        )
+
     def matches(self, expr: Expr) -> bool:
-        return isinstance(expr, AnchoredVF) and isinstance(
-            expr.section, (PhiSec, ChiSec)
+        return (
+            isinstance(expr, AnchoredVF)
+            and isinstance(expr.section, (PhiSec, ChiSec))
+            and (
+                self._alg is None
+                or expr.algebroid_name == self._alg
+            )
         )
 
     def rewrite(self, expr: Expr) -> Expr:
@@ -124,16 +146,26 @@ class SplitAnchorDefinition(Definition):
 
 class LieZDefinitionRule(Definition):
     """(9.7) — the DEFINITION of ``ℒ^Z``:
-    ``[φV, χz]_E → χ(ℒ^Z_V z)`` (well-defined by Lemma 9.1)."""
+    ``[φV, χz]_E → χ(ℒ^Z_V z)`` (well-defined by Lemma 9.1);
+    scoped to its algebroid when a name is given (finding 5)."""
 
-    name = "(9.7): [φV, χz]_E = χ(ℒ^Z_V z)"
     anchor = AlgebroidBracket
+
+    def __init__(
+        self, algebroid_name: Optional[str] = None
+    ) -> None:
+        self._alg = algebroid_name
+        self.name = "(9.7): [φV, χz]_E = χ(ℒ^Z_V z)"
 
     def matches(self, expr: Expr) -> bool:
         return (
             isinstance(expr, AlgebroidBracket)
             and isinstance(expr.u, PhiSec)
             and isinstance(expr.v, ChiSec)
+            and (
+                self._alg is None
+                or expr.algebroid_name == self._alg
+            )
         )
 
     def rewrite(self, expr: Expr) -> Expr:
@@ -144,21 +176,37 @@ class SymPartChiSwapDeclaration(Definition):
     """DECLARED symmetric part (6.11), oriented for the χ-φ order:
     ``[χz, φU]_E → −[φU, χz]_E + 𝔻g(χz, φU)`` — terminating (the
     χ-first bracket disappears; (9.7) then absorbs the φ-first
-    one)."""
+    one). The swapped bracket keeps the INPUT's algebroid identity
+    (2026-09-09 audit, finding 5 — no hardcoded ``"E"``)."""
 
-    name = "(6.11) at χ-φ: [χz,φU] = −[φU,χz] + 𝔻g(χz,φU)"
     anchor = AlgebroidBracket
+
+    def __init__(
+        self, algebroid_name: Optional[str] = None
+    ) -> None:
+        self._alg = algebroid_name
+        self.name = (
+            "(6.11) at χ-φ: [χz,φU] = −[φU,χz] + 𝔻g(χz,φU)"
+        )
 
     def matches(self, expr: Expr) -> bool:
         return (
             isinstance(expr, AlgebroidBracket)
             and isinstance(expr.u, ChiSec)
             and isinstance(expr.v, PhiSec)
+            and (
+                self._alg is None
+                or expr.algebroid_name == self._alg
+            )
         )
 
     def rewrite(self, expr: Expr) -> Expr:
         return Sum(
-            Neg(AlgebroidBracket("E", expr.v, expr.u)),
+            Neg(
+                AlgebroidBracket(
+                    expr.algebroid_name, expr.v, expr.u
+                )
+            ),
             BDop(BMetric(expr.u, expr.v)),
         )
 
@@ -299,10 +347,10 @@ def exact_bourbaki_engine(
     OFF inside the Prop 9.1 provers, which cite the instance
     manually); ``isotropic`` opts into the declared g-isotropy."""
     rules: List[Definition] = [
-        SplitAnchorDefinition(),
+        SplitAnchorDefinition(alg.name),
         BLieREChiDirectionVanishes(),
-        SymPartChiSwapDeclaration(),
-        LieZDefinitionRule(),
+        SymPartChiSwapDeclaration(alg.name),
+        LieZDefinitionRule(alg.name),
         DopViaChiDefinition(),
         Iota99Definition(),
     ]

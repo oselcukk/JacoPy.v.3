@@ -8,9 +8,12 @@ structures whose axiom suites Phase 7.B already verified:
 * all switches off      → the STANDARD Dorfman bracket
   (:mod:`standard_courant` — Courant axioms verified in 7.B.1);
 * tilde + R on, under the DECLARED Poisson condition
-                        → the Poisson generalized double
-  (:mod:`poisson_generalized` — the derived R-twist dies, 7.B.2c,
-  and what remains is exactly Watamura's ``(TM)₀ ⊕ (T*M)_θ``);
+                        → the TRIANGULAR θ-double
+  (:func:`~jacopy.packages.drinfeld.double.nambu_double` at
+  ``p = 1``, the LWX double of the Poisson bialgebroid — the
+  derived R-twist dies, 7.B.2c; NOT Watamura's trivial-TM
+  ``(TM)₀ ⊕ (T*M)_θ`` of :mod:`poisson_generalized`, whose anchor
+  kills pure vectors — 2026-09-09 audit, finding 2);
 * H on (tilde/R off)    → the H-TWISTED Dorfman bracket
   (:mod:`twisted_courant` — Courant ⟺ dH = 0, 7.B.2a).
 
@@ -33,6 +36,7 @@ from jacopy.core.expr import (
     Integer,
     Neg,
     Product,
+    Rational,
     Sum,
 )
 from jacopy.core.registry import PropertyRegistry
@@ -40,9 +44,11 @@ from jacopy.proof.chain import ProofChain
 from jacopy.proof.step import ProofStep
 from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
+from jacopy.central.tangent.exterior import d
 from jacopy.packages.drinfeld.double import (
     canonical_pairing,
     dorfman_double,
+    nambu_double,
 )
 from jacopy.packages.drinfeld.roytenberg import (
     roytenberg_bracket,
@@ -51,8 +57,6 @@ from jacopy.packages.drinfeld.twist import dorfman_double_h
 from jacopy.packages.generalized.poisson_generalized import (
     _normalize,
     _require_poisson,
-    d_operator_theta,
-    theta_dorfman,
 )
 from jacopy.packages.generalized.r_twisted import (
     _engine as _r_engine,
@@ -151,12 +155,17 @@ def prove_roytenberg_is_theta_double_under_poisson(
     declare_poisson: bool = True,
 ) -> Tuple[ProofChain, Theorem]:
     """THE 14g statement: with tilde + R on and the DECLARED Poisson
-    condition, the Roytenberg bracket IS the Poisson generalized
-    double — the natural R-twist ``R′ = [θ♯·,θ♯·] − θ♯[·,·]_θ``
-    dies under the fundamental identity (7.B.2c), and the remainder
-    is exactly Watamura's ``(TM)₀ ⊕ (T*M)_θ`` whose Courant axioms
-    Phase 7.B.2b verified. Honest-fail without the declaration: the
-    difference is the surviving R′."""
+    condition, the Roytenberg bracket IS the TRIANGULAR θ-double
+    (the LWX double of the Poisson Lie bialgebroid,
+    :func:`~jacopy.packages.drinfeld.double.nambu_double` at
+    ``p = 1``) — the natural R-twist ``R′ = [θ♯·,θ♯·] − θ♯[·,·]_θ``
+    dies under the fundamental identity (7.B.2c). Honest-fail
+    without the declaration: the difference is the surviving R′.
+
+    (2026-09-09 audit, finding 2: this identification's target is
+    the TRIANGULAR double — total anchor ``U + θ♯ω``, nonzero TM
+    side — NOT Watamura's ``(TM)₀ ⊕ (T*M)_θ`` of
+    :mod:`poisson_generalized`, whose TM side is trivial.)"""
     _require_poisson(N)
     engine = _r_engine(
         N, registry, declare_fi=declare_poisson
@@ -164,7 +173,7 @@ def prove_roytenberg_is_theta_double_under_poisson(
     r_vec, r_form = roytenberg_bracket(
         N, U, omega, V, eta, with_tilde=True, with_r=True
     )
-    t_vec, t_form = theta_dorfman(N, U, omega, V, eta)
+    t_vec, t_form = nambu_double(N, U, omega, V, eta)
     diffs = [
         Sum(r_vec, Neg(t_vec)),
         Sum(r_form, Neg(t_form)),
@@ -178,10 +187,10 @@ def prove_roytenberg_is_theta_double_under_poisson(
         )
     return _zero_theorem(
         "roytenberg_is_theta_double_under_poisson",
-        "Roytenberg(tilde, R) = the Poisson generalized double "
-        "(TM)₀ ⊕ (T*M)_θ under the declared Poisson condition — "
-        "the Poisson-case Roytenberg bracket yields the verified "
-        "Courant structure (PDF 14g)",
+        "Roytenberg(tilde, R) = the TRIANGULAR θ-double (LWX / "
+        "nambu_double at p = 1) under the declared Poisson "
+        "condition — the Poisson-case Roytenberg bracket yields "
+        "the verified Courant structure (PDF 14g)",
         diffs,
         engine,
         registry,
@@ -255,10 +264,12 @@ def prove_full_roytenberg_symmetric_part(
     """[C'4] of the FULL Roytenberg bracket (everything on): the H-
     and R-terms are antisymmetric, so
 
-    ``[x,y]_Roy + [y,x]_Roy = 2·D_θ⟨x,y⟩₊``
+    ``[x,y]_Roy + [y,x]_Roy = 2·𝒟_θ⟨x,y⟩₊``
 
-    — the coboundary ``D_θ`` of the Poisson generalized double
-    survives every twist."""
+    with ``𝒟_θ(h) = ½·(−θ♯dh, dh)`` — the coboundary of the
+    TRIANGULAR double (``𝒟 = ½(d̃ + d)``, the 6.D symmetric part;
+    distinct from Watamura's ``D_θ = ½(−θ♯dh, 0)`` whose structure
+    has no ``d``-leg) — surviving every twist."""
     _require_poisson(N)
     engine = _r_engine(N, registry, declare_fi=False)
     ab_vec, ab_form = roytenberg_bracket(
@@ -267,14 +278,18 @@ def prove_full_roytenberg_symmetric_part(
     ba_vec, ba_form = roytenberg_bracket(
         N, V, eta, U, omega, H=H
     )
-    D_vec, D_form = d_operator_theta(
-        N, canonical_pairing(U, omega, V, eta)
+    pairing = canonical_pairing(U, omega, V, eta)
+    # the triangular double's coboundary 𝒟 = ½(d̃ + d)
+    D_vec = Product(
+        Rational(1, 2), Neg(N.sharp_vf(d(pairing)))
     )
+    D_form = Product(Rational(1, 2), d(pairing))
     return _zero_theorem(
         "full_roytenberg_symmetric_part",
-        "[x,y]_Roy + [y,x]_Roy = 2·D_θ⟨x,y⟩₊ for the FULL "
-        "Roytenberg bracket — D_θ survives the H- and R-twists "
-        "([C'4]; PDF 14g)",
+        "[x,y]_Roy + [y,x]_Roy = 2·𝒟_θ⟨x,y⟩₊ for the FULL "
+        "Roytenberg bracket, 𝒟_θ = ½(d̃ + d) the triangular "
+        "coboundary — it survives the H- and R-twists ([C'4]; "
+        "PDF 14g)",
         [
             Sum(
                 ab_vec,

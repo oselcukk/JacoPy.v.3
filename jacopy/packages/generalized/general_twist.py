@@ -177,24 +177,40 @@ def general_twist_engine(
     registry: Optional[PropertyRegistry] = None,
     *,
     structure_rules: bool = True,
+    declared_rules: bool = False,
 ) -> ExpansionEngine:
-    """Ψ rules over the Phase 3 declaration engine (and optionally
-    the 7.B.2f R-valued structure rules)."""
+    """Ψ rules over the DEFINITIONAL layer only. By default the base
+    engine is built from a declaration-STRIPPED copy of the context:
+    the structural legs of the transport proofs must close from Ψ
+    invertibility + linearity + definitional rules alone, never by
+    silently invoking a declared axiom's auto-rewrite (2026-09-09
+    audit, finding 1 — the axioms enter ONLY as explicitly cited,
+    precondition-checked instances). ``declared_rules=True`` keeps
+    the context's declared rewrites — for provers that have ALREADY
+    precondition-checked the declaration they rely on (the
+    right-Leibniz transport)."""
     rules: List[Definition] = [
         PsiInverseDefinition(),
         PsiLinearityDefinition(registry),
     ]
     eng = ExpansionEngine(rules)
+    plain = (
+        alg
+        if declared_rules
+        else Algebroid(
+            alg.name, alg.bundle, anchor_name=alg.anchor_name
+        )
+    )
     if structure_rules:
         from jacopy.packages.generalized.bourbaki_structure import (
             bourbaki_structure_engine,
         )
 
         base = bourbaki_structure_engine(
-            alg, registry, invariance=False
+            plain, registry, invariance=False
         )
     else:
-        base = algebroid_engine(alg, registry=registry)
+        base = algebroid_engine(plain, registry=registry)
     for d_ in base.definitions:
         eng.register(d_)
     return eng
@@ -216,7 +232,6 @@ def _zero_theorem(
     from_axioms,
     notes,
     label,
-    extra_steps=(),
 ) -> Tuple[ProofChain, Theorem]:
     nf = _normalize(engine, diff, registry)
     if nf != Integer(0):
@@ -224,7 +239,7 @@ def _zero_theorem(
             f"{name}: {label} FAILS — residual "
             + nf._repr_inner()[:160]
         )
-    steps = list(extra_steps) + [
+    steps = [
         ProofStep(
             diff,
             Integer(0),
@@ -244,6 +259,90 @@ def _zero_theorem(
         notes=notes,
     )
     return chain, theorem
+
+
+def _structural_step(
+    name, target, instance, engine, registry, *, label
+) -> ProofStep:
+    """``target → instance`` — the STRUCTURAL leg of a transport
+    proof: the twisted expression equals ``Ψ⁻¹`` of the initial
+    instance using ONLY invertibility and linearity of ``Ψ`` (no
+    axiom of the initial bracket). Verified as
+    ``NF(target − instance) = 0``."""
+    nf = _normalize(
+        engine, Sum(target, Neg(instance)), registry
+    )
+    if nf != Integer(0):
+        raise ProofFailure(
+            f"{name}: {label} FAILS — residual "
+            + nf._repr_inner()[:160]
+        )
+    return ProofStep(
+        target,
+        instance,
+        rule=label,
+        justification=(
+            "engine normal form of the difference "
+            "(Ψ invertibility + linearity only)"
+        ),
+    )
+
+
+def _cited_transport_theorem(
+    name,
+    statement,
+    target,
+    instance,
+    cite_rule,
+    engine,
+    registry,
+    *,
+    from_axioms,
+    notes,
+    label,
+) -> Tuple[ProofChain, Theorem]:
+    """``target = 0`` in two honest legs: the structural identity
+    ``target → instance`` followed by the cited declared-zero
+    instance ``instance → 0``. The RECORDED equation is the
+    advertised target (``lhs = target``, ``rhs = 0``) — reusable by
+    :class:`~jacopy.proof.theorems.TheoremDefinition` on the real
+    twisted goal (2026-09-09 audit, finding 6)."""
+    structural = _structural_step(
+        name, target, instance, engine, registry, label=label
+    )
+    cite = ProofStep(
+        instance,
+        Integer(0),
+        rule=cite_rule,
+        justification=(
+            "declared axiom instance; Ψ⁻¹(0) = 0"
+        ),
+        provenance_tag="axiom",
+    )
+    chain = ProofChain([structural, cite])
+    theorem = Theorem(
+        name=name,
+        statement=statement,
+        lhs=target,
+        rhs=Integer(0),
+        proof=chain,
+        generality="generic-function",
+        from_axioms=from_axioms,
+        notes=notes,
+    )
+    return chain, theorem
+
+
+def _require_declared(alg: Algebroid, prop: str, what: str) -> None:
+    """Honest-fail precondition check (2026-09-09 audit, finding 1):
+    a transport theorem may cite an initial-bracket axiom ONLY when
+    that axiom is actually declared on the context."""
+    if not alg.declares(prop):
+        raise ProofFailure(
+            f"the transport of {what} needs the initial "
+            f"bracket's declared {prop!r} — not declared on "
+            f"algebroid {alg.name!r}"
+        )
 
 
 def prove_general_twist_bilinearity(
@@ -299,7 +398,7 @@ def prove_general_twist_right_leibniz(
             "right-Leibniz"
         )
     engine = general_twist_engine(
-        alg, registry, structure_rules=False
+        alg, registry, structure_rules=False, declared_rules=True
     )
     diff = Sum(
         twisted_bracket(alg, u, Product(f, v)),
@@ -338,7 +437,23 @@ def prove_general_twist_jacobi(
     ``Ψ⁻¹`` of the initial one at ``(Ψu, Ψv, Ψw)``, cited as a
     declared-zero instance,
 
-    ``[u,[v,w]']' = [[u,v]',w]' + [v,[u,w]']'``."""
+    ``[u,[v,w]']' = [[u,v]',w]' + [v,[u,w]']''
+
+    — the FULL theorem needs the initial bracket's DECLARED
+    ``jacobi``. Without it (but with some declared algebroid
+    structure) the CONDITIONAL/structural form is returned instead:
+    ``J'(u,v,w) = Ψ⁻¹ J(Ψu,Ψv,Ψw)`` with ``rhs`` the instance, NOT
+    zero — every step of that chain holds with no Jacobi assumption
+    (2026-09-09 audit, findings 1 and 6). A bracket declaring
+    nothing at all honest-fails: there is no structure to
+    transport."""
+    if not alg.declarations:
+        raise ProofFailure(
+            "the Ψ-transport needs a declared algebroid "
+            f"structure on {alg.name!r} — nothing is declared, "
+            "so there is nothing to transport (not even the "
+            "conditional form is minted)"
+        )
     engine = general_twist_engine(
         alg, registry, structure_rules=False
     )
@@ -357,24 +472,52 @@ def prove_general_twist_jacobi(
             Neg(B(pv, B(pu, pw))),
         )
     )
-    cite = ProofStep(
-        instance,
-        Integer(0),
-        rule=(
-            "cite the initial bracket's Leibniz-Jacobi at "
-            "(Ψu, Ψv, Ψw), carried through Ψ⁻¹"
-        ),
-        justification=(
-            "declared axiom instance; Ψ⁻¹(0) = 0"
-        ),
-        provenance_tag="axiom",
+    name = f"general_twist_jacobi_{alg.name}"
+    label = (
+        "twisted Jacobiator equals Ψ⁻¹ of the initial "
+        "Jacobiator at (Ψu, Ψv, Ψw) — structural"
     )
-    return _zero_theorem(
-        f"general_twist_jacobi_{alg.name}",
+    if not alg.declares("jacobi"):
+        # CONDITIONAL form: only the structural identity is
+        # recorded — lhs = J', rhs = Ψ⁻¹J (NOT zero), and the
+        # statement says so explicitly.
+        structural = _structural_step(
+            name, target, instance, engine, registry,
+            label=label,
+        )
+        chain = ProofChain([structural])
+        theorem = Theorem(
+            name=name,
+            statement=(
+                "STRUCTURAL identity only: J'(u,v,w) = "
+                "Ψ⁻¹ J(Ψu,Ψv,Ψw). Leibniz-Jacobi transports "
+                "through any invertible Ψ CONDITIONALLY — "
+                "J' = 0 requires the initial bracket's "
+                "Leibniz-Jacobi, which is NOT declared on "
+                f"{alg.name!r} and is NOT established here (13j)"
+            ),
+            lhs=target,
+            rhs=instance,
+            proof=chain,
+            generality="generic-function",
+            from_axioms=("Ψ/Ψ⁻¹ invertibility + linearity",),
+            notes=(
+                "PDF 13j general procedure — conditional form; "
+                "declare 'jacobi' for the full theorem"
+            ),
+        )
+        return chain, theorem
+    return _cited_transport_theorem(
+        name,
         "[u,[v,w]']' = [[u,v]',w]' + [v,[u,w]']' — "
         "Leibniz-Jacobi transports through any invertible Ψ "
         "(13j)",
-        Sum(target, Neg(instance)),
+        target,
+        instance,
+        (
+            "cite the initial bracket's Leibniz-Jacobi at "
+            "(Ψu, Ψv, Ψw), carried through Ψ⁻¹"
+        ),
         engine,
         registry,
         from_axioms=(
@@ -383,11 +526,7 @@ def prove_general_twist_jacobi(
             "Ψ/Ψ⁻¹ invertibility",
         ),
         notes="PDF 13j general procedure",
-        label=(
-            "twisted Jacobiator minus the cited instance "
-            "normalizes to 0"
-        ),
-        extra_steps=(cite,),
+        label=label,
     )
 
 
@@ -403,8 +542,12 @@ def prove_general_twist_symmetric_part(
     ``[u,v]' + [v,u]' = 𝔻'g'(u,v)``,
     ``𝔻' = Ψ⁻¹∘𝔻``, ``g'(u,v) = g(Ψu, Ψv)``
 
-    — cited from the initial bracket's declared (6.11) instance at
-    ``(Ψu, Ψv)``."""
+    — cited from the initial bracket's DECLARED (6.11) instance at
+    ``(Ψu, Ψv)`` (honest-fail without the ``symmetric-part``
+    declaration; 2026-09-09 audit, finding 1)."""
+    _require_declared(
+        alg, "symmetric-part", "the (6.11) symmetric part"
+    )
     engine = general_twist_engine(alg, registry)
     B = alg.bracket
     pu, pv = PsiSec(u), PsiSec(v)
@@ -415,27 +558,22 @@ def prove_general_twist_symmetric_part(
             Neg(BDop(BMetric(pu, pv))),
         )
     )
-    cite = ProofStep(
-        instance,
-        Integer(0),
-        rule=(
-            "cite the initial (6.11) symmetric part at "
-            "(Ψu, Ψv), carried through Ψ⁻¹"
-        ),
-        justification="declared axiom instance; Ψ⁻¹(0) = 0",
-        provenance_tag="axiom",
-    )
     target = Sum(
         twisted_bracket(alg, u, v),
         twisted_bracket(alg, v, u),
         Neg(twisted_d(twisted_metric(u, v))),
     )
-    return _zero_theorem(
+    return _cited_transport_theorem(
         f"general_twist_symmetric_part_{alg.name}",
         "[u,v]' + [v,u]' = 𝔻'g'(u,v) with 𝔻' = Ψ⁻¹∘𝔻 and "
         "g' = g(Ψ·,Ψ·) — the Bourbaki data transports with the "
         "primed operators separated out (13j)",
-        Sum(target, Neg(instance)),
+        target,
+        instance,
+        (
+            "cite the initial (6.11) symmetric part at "
+            "(Ψu, Ψv), carried through Ψ⁻¹"
+        ),
         engine,
         registry,
         from_axioms=(
@@ -445,10 +583,9 @@ def prove_general_twist_symmetric_part(
         ),
         notes="PDF 13j: the primed operators 𝔻', g'",
         label=(
-            "twisted symmetric part minus the cited instance "
-            "normalizes to 0"
+            "twisted symmetric part equals Ψ⁻¹ of the initial "
+            "instance — structural"
         ),
-        extra_steps=(cite,),
     )
 
 
@@ -464,13 +601,18 @@ def prove_general_twist_invariance(
 
     ``ℒ^R_{ρ'(u)} g'(v,w) = g'([u,v]', w) + g'(v, [u,w]')``
 
-    — cited from the initial (7.8) instance at ``(Ψu, Ψv, Ψw)``
-    (the ℒ^R operator itself is unchanged: it reads only the
-    anchor direction, and ``ρ'(u) = ρ(Ψu)``)."""
+    — cited from the initial (7.8) DECLARED instance at
+    ``(Ψu, Ψv, Ψw)`` (the ℒ^R operator itself is unchanged: it
+    reads only the anchor direction, and ``ρ'(u) = ρ(Ψu)``);
+    honest-fail without the ``metric-invariance`` declaration
+    (2026-09-09 audit, finding 1)."""
     from jacopy.packages.generalized.bourbaki_structure import (
         BLieRE,
     )
 
+    _require_declared(
+        alg, "metric-invariance", "the (7.8) metric invariance"
+    )
     engine = general_twist_engine(alg, registry)
     pu, pv, pw = PsiSec(u), PsiSec(v), PsiSec(w)
     B = alg.bracket
@@ -478,15 +620,6 @@ def prove_general_twist_invariance(
         BLieRE(pu, BMetric(pv, pw)),
         Neg(BMetric(B(pu, pv), pw)),
         Neg(BMetric(pv, B(pu, pw))),
-    )
-    cite = ProofStep(
-        instance,
-        Integer(0),
-        rule=(
-            "cite the initial (7.8) invariance at (Ψu, Ψv, Ψw)"
-        ),
-        justification="declared axiom instance",
-        provenance_tag="axiom",
     )
     target = Sum(
         BLieRE(pu, twisted_metric(v, w)),
@@ -501,12 +634,16 @@ def prove_general_twist_invariance(
             )
         ),
     )
-    return _zero_theorem(
+    return _cited_transport_theorem(
         f"general_twist_invariance_{alg.name}",
         "ℒ^R_{ρ'(u)} g'(v,w) = g'([u,v]', w) + g'(v, [u,w]') — "
         "metric invariance transports through Ψ with the primed "
         "metric and anchor (13j)",
-        Sum(target, Neg(instance)),
+        target,
+        instance,
+        (
+            "cite the initial (7.8) invariance at (Ψu, Ψv, Ψw)"
+        ),
         engine,
         registry,
         from_axioms=(
@@ -516,8 +653,7 @@ def prove_general_twist_invariance(
         ),
         notes="PDF 13j: g' = g(Ψ·,Ψ·), ρ' = ρ∘Ψ",
         label=(
-            "twisted invariance minus the cited instance "
-            "normalizes to 0"
+            "twisted invariance equals the initial instance — "
+            "structural"
         ),
-        extra_steps=(cite,),
     )

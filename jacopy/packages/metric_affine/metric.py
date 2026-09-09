@@ -103,18 +103,32 @@ class MetricValue(Atom):
 
 class Metric:
     """``g`` — a (pseudo-)Riemannian metric context on TM (symmetric,
-    non-degenerate (0,2)-tensor BY DEFINITION)."""
+    non-degenerate (0,2)-tensor BY DEFINITION).
 
-    __slots__ = ("_name",)
+    Carries its owning ``bundle`` (default: the tangent bundle
+    ``TM``) so the round-trip through the central ATOM
+    representation loses neither the bundle nor its dimension
+    (2026-09-09 audit, finding 7)."""
 
-    def __init__(self, name: str = "g") -> None:
+    __slots__ = ("_name", "_bundle")
+
+    def __init__(self, name: str = "g", *, bundle=None) -> None:
+        from jacopy.central.objects.bundle import TM, Bundle
+
         if not isinstance(name, str) or not name:
             raise ValueError("Metric name must be a non-empty str")
+        if bundle is not None and not isinstance(bundle, Bundle):
+            raise TypeError("bundle must be a Bundle instance")
         self._name = name
+        self._bundle = bundle if bundle is not None else TM
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def bundle(self):
+        return self._bundle
 
     def __call__(self, X: Expr, Y: Expr) -> MetricValue:
         if not isinstance(X, Expr) or not isinstance(Y, Expr):
@@ -122,18 +136,22 @@ class Metric:
         return MetricValue(self._name, X, Y)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Metric) and self._name == other._name
+        return (
+            isinstance(other, Metric)
+            and self._name == other._name
+            and self._bundle == other._bundle
+        )
 
     def __hash__(self) -> int:
-        return hash(("tm-metric", self._name))
+        return hash(("tm-metric", self._name, self._bundle))
 
     def __repr__(self) -> str:
-        return f"Metric({self._name!r})"
+        return f"Metric({self._name!r}, bundle={self._bundle!r})"
 
 
-def metric(name: str = "g") -> Metric:
-    """Create a metric context."""
-    return Metric(name)
+def metric(name: str = "g", *, bundle=None) -> Metric:
+    """Create a metric context (default bundle: ``TM``)."""
+    return Metric(name, bundle=bundle)
 
 
 def as_metric_context(g) -> Metric:
@@ -146,8 +164,10 @@ def as_metric_context(g) -> Metric:
     two carry the same defining semantics (a symmetric,
     non-degenerate (0,2)-tensor BY DEFINITION), differing only in
     their role (Expr atom for Hodge/musical vs evaluation context
-    here), so the bridge is the shared name. Anything else raises.
-    """
+    here). The bridge preserves the FULL identity — name AND bundle
+    (2026-09-09 audit, finding 7: same-named metrics on different
+    bundles stay distinct, dimensions survive the round trip).
+    Anything else raises."""
     if isinstance(g, Metric):
         return g
     from jacopy.central.objects.metric import (
@@ -155,7 +175,7 @@ def as_metric_context(g) -> Metric:
     )
 
     if isinstance(g, CentralMetric):
-        return Metric(g.name)
+        return Metric(g.name, bundle=g.bundle)
     raise TypeError(
         "expected a metric (metric_affine context or the central "
         f"Metric atom), got {type(g).__name__}"

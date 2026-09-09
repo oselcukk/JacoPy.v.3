@@ -53,26 +53,45 @@ def _tensor_head(expr: Expr, op_type) -> Optional[tuple]:
 
 
 class TensorLieEvalDefinition(Definition):
-    """``(ℒ_X T)(a₁,…) → X(T(a₁,…)) − Σᵢ T(…, ℒ_X aᵢ, …)`` — the
+    """``(ℒ_X T)(a₁,…) → ρ(X)(T(a₁,…)) − Σᵢ T(…, ℒ_X aᵢ, …)`` — the
     canonical evaluation law of the Lie derivative on a (q,r)-tensor
     (PDF 9e). Slot-agnostic: the same ``ℒ_X`` acts in covector and
     vector slots (the intrinsic rules then turn ``ℒ_X Y`` into
-    ``[X, Y]``)."""
+    ``[X, Y]``).
 
-    name = (
-        "tensor Lie evaluation: (ℒ_X T)(a…) = X(T(a…)) − "
-        "Σ T(…, ℒ_X aᵢ, …)"
-    )
+    Parametrized by its :class:`BracketCalculus` (default: the
+    tangent ``CARTAN_TM``): the rule fires ONLY on ``ℒ`` operators
+    of THAT calculus and its scalar term uses the calculus' genuine
+    anchor — a foreign calculus' ``ℒ^A`` stays inert instead of
+    being unrolled with the wrong (anchorless) formula (2026-09-09
+    audit, finding 8)."""
+
     anchor = MultiEval
 
     def __init__(
-        self, registry: Optional[PropertyRegistry] = None
+        self,
+        registry: Optional[PropertyRegistry] = None,
+        *,
+        calculus=None,
     ) -> None:
+        if calculus is None:
+            from jacopy.central.tangent.exterior import (
+                CARTAN_TM,
+            )
+
+            calculus = CARTAN_TM
         self._registry = registry
+        self._calc = calculus
+        self.name = (
+            f"tensor Lie evaluation ({calculus.name}): "
+            "(ℒ_X T)(a…) = ρ(X)(T(a…)) − Σ T(…, ℒ_X aᵢ, …)"
+        )
 
     def matches(self, expr: Expr) -> bool:
+        found = _tensor_head(expr, LieDerivative)
         return (
-            _tensor_head(expr, LieDerivative) is not None
+            found is not None
+            and found[0].calculus_name == self._calc.name
         )
 
     def rewrite(self, expr: Expr) -> Expr:
@@ -81,7 +100,7 @@ class TensorLieEvalDefinition(Definition):
         args = expr.args
         terms = [
             Act(
-                X,
+                self._calc.anchor(X),
                 MultiEval(
                     T,
                     *args,

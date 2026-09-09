@@ -1,39 +1,43 @@
 """
 Poisson generalized geometry (Phase 7.B.2b; PDF item 14f, Watamura
-et al. [arXiv:1408.2649 §2-3]): the Courant algebroid
-``(TM)₀ ⊕ (T*M)_θ`` over a Poisson base — the TILDE-Dorfman bracket
-whose form side carries the Koszul bracket and whose vector side
-carries the θ-induced tilde calculus, its skew TILDE-Courant
-companion, and their axiom suite, concrete on ``TM ⊕ T*M``.
+et al. [arXiv:1408.2649 §2.2, (2.6)-(2.7)]): the Courant algebroid
+``(TM)₀ ⊕ (T*M)_θ`` over a Poisson base — the Lie bialgebroid
+double whose **T*M side carries the Koszul structure** (bracket
+``[·,·]_θ``, anchor ``θ♯``) and whose **TM side is TRIVIAL** (zero
+bracket, zero anchor — the ``(TM)₀`` subscript of the paper):
+
+    anchor: ρ(U + ω) = θ♯ω               (2.6),
+    vector: ℒ̃_ω V − ℒ̃_η U + d̃ ι̃_η U,
+    form:   [ω, η]_θ                      (2.7),
+
+with coboundary ``D_θ(h) = ½·(d̃h, 0) = ½·(−θ♯dh, 0)`` (Uchino
+Rem 1 normalization: ``⟨D_θh, x⟩₊ = ½ρ(x)h``). In particular the
+anchor KILLS pure vectors and the bracket of two pure vectors is
+ZERO — direct consequences of (2.6)-(2.7) (2026-09-09 audit,
+finding 2: an earlier revision wrongly exposed the TRIANGULAR/LWX
+double — nonzero TM-side bracket and total anchor ``U + θ♯ω`` —
+under the Watamura name; that structure remains available on its
+own terms as :func:`~jacopy.packages.drinfeld.double.nambu_double`).
 
 Representation: the Phase 6 Nambu machinery at ``p = 1`` — a
-``NambuPoissonStructure`` of order 1 IS a Poisson bivector ``θ``,
-and :func:`~jacopy.packages.drinfeld.double.nambu_double` at
-``p = 1`` is exactly the triangular/LWX double of Watamura's
-structure:
+``NambuPoissonStructure`` of order 1 IS a Poisson bivector ``θ``.
+Inventory, all for the (2.6)-(2.7) structure itself:
 
-    vector: [U,V] + ℒ̃_ω V − ℒ̃_η U + d̃ ι̃_η U,
-    form:   [ω,η]_θ + ℒ_U η − ℒ_V ω + d ι_V ω,
-
-with total anchor ``ρ(U+ω) = U + θ♯ω`` and coboundary
-``D_θ(h) = ½·(d̃h, dh) = ½·(−θ♯dh, dh)`` (Uchino Rem 1
-normalization, as in :mod:`standard_courant`). Inventory:
-
-* [C'3] right-Leibniz and [C'4] symmetric part — Phase 6.D, any
-  bivector (:mod:`jacopy.packages.drinfeld.double`);
-* **[C'2]** — the total anchor is a bracket morphism: THE 6.I.4
-  capstone (4.19), under the declared fundamental identity (= the
-  Poisson condition at ``p = 1``); re-exported here with the
-  Watamura framing;
-* this module adds, concrete: **[C'5]** invariance of the canonical
-  pairing, the **tilde-Courant bracket** with skewness and the
+* **[C'2]** — ``ρ`` is a bracket morphism: ``θ♯`` intertwines the
+  Koszul and Lie brackets under the declared Poisson condition
+  (:func:`prove_theta_anchor_morphism`);
+* **[C'3]** right-Leibniz with ``ρ(x)f = (θ♯ω)(f)``
+  (:func:`prove_theta_right_leibniz`);
+* **[C'4]** symmetric part ``[x,y] + [y,x] = 2·D_θ⟨x,y⟩₊``
+  (:func:`prove_theta_symmetric_part`);
+* **[C'5]** invariance of the canonical pairing
+  (:func:`prove_theta_invariance`);
+* the **tilde-Courant bracket** with skewness and the
   Dorfman↔Courant relation, and the ``⟨D_θh, x⟩₊ = ½ρ(x)h``
   normalization cross-check against the 7.A axiomatics.
 
-The audit note is honored: this is the Watamura STRUCTURE itself
-(θ-twisted double on a Poisson base), not a renaming of Π-twist
-results — the R-flux twist of THIS structure is the separate
-7.B.2c slice.
+The R-flux twist of THIS structure is the separate 7.B.2c slice
+(:mod:`r_twisted` — the R-term lands in ``ker ρ``).
 """
 
 from __future__ import annotations
@@ -57,9 +61,9 @@ from jacopy.proof.step import ProofStep
 from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
 from jacopy.central.tangent.exterior import d
+from jacopy.central.tangent.lie_bracket import lie_bracket
 from jacopy.packages.drinfeld.double import (
     canonical_pairing,
-    nambu_double,
 )
 from jacopy.packages.drinfeld.tilde_calculus import _tilde_engine
 from jacopy.packages.poisson.nambu import (
@@ -83,6 +87,12 @@ def _require_poisson(N: NambuPoissonStructure) -> None:
         )
 
 
+def _iota(X: Expr, x: Expr) -> Expr:
+    from jacopy.central.objects.interior import Interior
+
+    return Act(Interior(X), x)
+
+
 def theta_dorfman(
     N: NambuPoissonStructure,
     U: Expr,
@@ -90,30 +100,55 @@ def theta_dorfman(
     V: Expr,
     eta: Expr,
 ) -> Tuple[Expr, Expr]:
-    """The tilde-Dorfman bracket of ``(TM)₀ ⊕ (T*M)_θ`` — the
-    triangular double [Watamura §2; drinfeld eq (4.17)]."""
+    """The tilde-Dorfman bracket of ``(TM)₀ ⊕ (T*M)_θ``
+    [Watamura (2.7)]: the TM side is TRIVIAL, so
+
+        vector: ℒ̃_ω V − ℒ̃_η U + d̃ ι̃_η U,
+        form:   [ω, η]_θ
+
+    — in particular the bracket of two PURE VECTORS is zero
+    (2026-09-09 audit, finding 2; the triangular double with the
+    nonzero TM side is :func:`~jacopy.packages.drinfeld.double.\
+nambu_double`)."""
+    from jacopy.packages.drinfeld.double import (
+        lie_tilde_nambu,
+    )
+    from jacopy.packages.poisson.nambu import (
+        nambu_koszul_bracket,
+    )
+
     _require_poisson(N)
-    return nambu_double(N, U, omega, V, eta)
+    vec = Sum(
+        lie_tilde_nambu(N, omega, V),
+        Neg(lie_tilde_nambu(N, eta, U)),
+        Neg(N.sharp_vf(d(_iota(U, eta)))),
+    )
+    form = nambu_koszul_bracket(N, omega, eta)
+    return vec, form
 
 
 def theta_anchor(
     N: NambuPoissonStructure, U: Expr, omega: Expr
 ) -> Expr:
-    """``ρ(U+ω) = U + θ♯ω`` — the total anchor [eq (4.19)]."""
+    """``ρ(U+ω) = θ♯ω`` — the anchor of ``(TM)₀ ⊕ (T*M)_θ``
+    [Watamura (2.6)]: pure vectors are KILLED (2026-09-09 audit,
+    finding 2 — the earlier ``U + θ♯ω`` was the triangular
+    double's total anchor, not this structure's)."""
     _require_poisson(N)
-    return Sum(U, N.sharp_vf(omega))
+    return N.sharp_vf(omega)
 
 
 def d_operator_theta(
     N: NambuPoissonStructure, h: Expr
 ) -> Tuple[Expr, Expr]:
-    """``D_θ(h) = ½·(−θ♯dh, dh)`` — the θ-coboundary, normalized so
-    ``⟨D_θh, x⟩₊ = ½·ρ(x)(h)`` (see
-    :func:`prove_theta_d_pairing_value`)."""
+    """``D_θ(h) = ½·(−θ♯dh, 0)`` — the θ-coboundary of the
+    (2.6)-(2.7) structure, normalized so ``⟨D_θh, x⟩₊ = ½·ρ(x)(h)``
+    (see :func:`prove_theta_d_pairing_value`); its form leg is ZERO
+    because ``ρ`` reads only the form slot."""
     _require_poisson(N)
     return (
         Product(Rational(1, 2), Neg(N.sharp_vf(d(h)))),
-        Product(Rational(1, 2), d(h)),
+        Integer(0),
     )
 
 
@@ -145,24 +180,41 @@ def prove_theta_anchor_morphism(
     registry: Optional[PropertyRegistry] = None,
     declare_poisson: bool = True,
 ) -> ProofChain:
-    """[C'2] for the Poisson generalized double:
-    ``ρ([x,y]_{D,θ}) = [ρ(x), ρ(y)]_Lie`` probed on ``h`` — THE
-    6.I.4 capstone (4.19) at ``p = 1``, under the declared Poisson
-    condition (honest-fail without)."""
-    from jacopy.packages.drinfeld.bracket_morphism import (
-        prove_total_anchor_is_bracket_morphism,
-    )
+    """[C'2] for the Poisson generalized double
+    ``(TM)₀ ⊕ (T*M)_θ``: ``ρ([x,y]_{D,θ}) = [ρ(x), ρ(y)]_Lie``
+    probed on ``h``. With the (2.6) anchor ``ρ`` reads ONLY the
+    form slot, so the statement reduces to ``θ♯`` being a
+    Koszul-to-Lie bracket morphism,
+
+        θ♯[ω,η]_θ = [θ♯ω, θ♯η]_Lie,
+
+    which holds under the declared Poisson condition (honest-fail
+    without — the defect is the derived R-twist R′)."""
+    from jacopy.proof.strategies import ExpandAndSimplify
 
     _require_poisson(N)
-    return prove_total_anchor_is_bracket_morphism(
-        N,
-        U,
-        omega,
-        V,
-        eta,
+    _, form = theta_dorfman(N, U, omega, V, eta)
+    node = Act(
+        Sum(
+            N.sharp_vf(form),
+            Neg(
+                lie_bracket(
+                    theta_anchor(N, U, omega),
+                    theta_anchor(N, V, eta),
+                )
+            ),
+        ),
         h,
+    )
+    engine = _tilde_engine(
+        N, registry, declare_fi=declare_poisson
+    )
+    return ExpandAndSimplify().prove(
+        node,
+        Integer(0),
         registry=registry,
-        declare_fi=declare_poisson,
+        engine=engine,
+        max_steps=60000,
     )
 
 
@@ -237,16 +289,127 @@ def prove_theta_courant_skew(
         "poisson_generalized_courant_skew",
         "[x,y]_{C,θ} + [y,x]_{C,θ} = 0 on (TM)₀ ⊕ (T*M)_θ "
         "(tilde-Courant skewness; equivalently the relation "
-        "[x,y]_{C,θ} = [x,y]_{D,θ} − D_θ⟨x,y⟩₊ kills the 6.D "
-        "symmetric part). Any bivector.",
+        "[x,y]_{C,θ} = [x,y]_{D,θ} − D_θ⟨x,y⟩₊ kills the "
+        "[C'4] symmetric part 2·D_θ⟨x,y⟩₊). Any bivector.",
         [Sum(ab_vec, ba_vec), Sum(ab_form, ba_form)],
         engine,
         registry,
         from_axioms=(
             "tilde-Dorfman + pairing + D_θ definitions",
-            "6.D symmetric part (𝒟 = d + d̃)",
+            "Koszul antisymmetry + tilde Cartan magic "
+            "(D_θ = ½(−θ♯dh, 0))",
         ),
         notes="PDF 14f.ii / Watamura §2",
+        labels=(
+            "vector component normalizes to 0",
+            "form component normalizes to 0",
+        ),
+    )
+
+
+def prove_theta_right_leibniz(
+    N: NambuPoissonStructure,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    f: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+) -> Tuple[ProofChain, Theorem]:
+    """[C'3] for the (2.6)-(2.7) structure:
+
+    ``[x, f·y]_{D,θ} = f·[x,y]_{D,θ} + (ρ(x)f)·y``
+
+    with ``ρ(x)f = (θ♯ω)(f)`` — component-wise, any bivector."""
+    from jacopy.packages.poisson.nambu import (
+        NambuSharpLinearityDefinition,
+    )
+
+    _require_poisson(N)
+    engine = _tilde_engine(N, registry, declare_fi=False)
+    engine.register(NambuSharpLinearityDefinition(N, registry))
+    l_vec, l_form = theta_dorfman(
+        N, U, omega, Product(f, V), Product(f, eta)
+    )
+    b_vec, b_form = theta_dorfman(N, U, omega, V, eta)
+    rho_f = Act(theta_anchor(N, U, omega), f)
+    return _zero_theorem(
+        "poisson_generalized_right_leibniz",
+        "[x, f·y]_{D,θ} = f·[x,y]_{D,θ} + (ρ(x)f)·y on "
+        "(TM)₀ ⊕ (T*M)_θ with ρ(x)f = (θ♯ω)(f) ([C'3]; "
+        "Watamura (2.6)-(2.7))",
+        [
+            Sum(
+                l_vec,
+                Neg(Product(f, b_vec)),
+                Neg(Product(rho_f, V)),
+            ),
+            Sum(
+                l_form,
+                Neg(Product(f, b_form)),
+                Neg(Product(rho_f, eta)),
+            ),
+        ],
+        engine,
+        registry,
+        from_axioms=(
+            "tilde-Dorfman + (2.6) anchor definitions",
+            "Koszul/tilde calculus Leibniz rules",
+        ),
+        notes="PDF 14f / Watamura §2.2",
+        labels=(
+            "vector component normalizes to 0",
+            "form component normalizes to 0",
+        ),
+    )
+
+
+def prove_theta_symmetric_part(
+    N: NambuPoissonStructure,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+) -> Tuple[ProofChain, Theorem]:
+    """[C'4] for the (2.6)-(2.7) structure:
+
+    ``[x,y]_{D,θ} + [y,x]_{D,θ} = 2·D_θ⟨x,y⟩₊``
+
+    — the Koszul form parts cancel by antisymmetry and the tilde
+    magic terms assemble to ``d̃⟨x,y⟩₊``; any bivector."""
+    _require_poisson(N)
+    engine = _tilde_engine(N, registry, declare_fi=False)
+    ab_vec, ab_form = theta_dorfman(N, U, omega, V, eta)
+    ba_vec, ba_form = theta_dorfman(N, V, eta, U, omega)
+    D_vec, D_form = d_operator_theta(
+        N, canonical_pairing(U, omega, V, eta)
+    )
+    return _zero_theorem(
+        "poisson_generalized_symmetric_part",
+        "[x,y]_{D,θ} + [y,x]_{D,θ} = 2·D_θ⟨x,y⟩₊ on "
+        "(TM)₀ ⊕ (T*M)_θ ([C'4]; Watamura (2.6)-(2.7))",
+        [
+            Sum(
+                ab_vec,
+                ba_vec,
+                Neg(Product(Integer(2), D_vec)),
+            ),
+            Sum(
+                ab_form,
+                ba_form,
+                Neg(Product(Integer(2), D_form)),
+            ),
+        ],
+        engine,
+        registry,
+        from_axioms=(
+            "tilde-Dorfman + pairing + D_θ definitions",
+            "Koszul antisymmetry + tilde Cartan magic",
+        ),
+        notes="PDF 14f / Watamura §2.2",
         labels=(
             "vector component normalizes to 0",
             "form component normalizes to 0",
@@ -266,10 +429,10 @@ def prove_theta_d_pairing_value(
 
     ``⟨D_θh, x⟩₊ = ½·ρ(x)(h)``
 
-    — the dh-component pairs with the vector part, the −θ♯dh
-    component with the form part (bivector antisymmetry), together
-    reproducing half the total-anchor action. Ties the θ-double to
-    the 7.A abstract axiomatics."""
+    — ``D_θh`` is pure-vector ``½(−θ♯dh)``, its pairing with the
+    form leg ``ω`` reproduces (bivector antisymmetry) half the
+    (2.6) anchor action ``½(θ♯ω)(h)``. Ties the θ-double to the
+    7.A abstract axiomatics."""
     _require_poisson(N)
     engine = _tilde_engine(N, registry, declare_fi=False)
     D_vec, D_form = d_operator_theta(N, h)
@@ -285,7 +448,7 @@ def prove_theta_d_pairing_value(
         engine,
         registry,
         from_axioms=(
-            "D_θ + pairing + total anchor definitions",
+            "D_θ + pairing + (2.6) anchor definitions",
             "bivector antisymmetry",
         ),
         notes="PDF 14f",
@@ -472,7 +635,8 @@ def prove_theta_invariance(
 
     ``ρ(x)⟨y, z⟩₊ = ⟨x∘_θ y, z⟩₊ + ⟨y, x∘_θ z⟩₊``
 
-    with the TOTAL anchor acting on the scalar pairing — CLOSED
+    with the (2.6) anchor ``ρ(x) = θ♯ω`` acting on the scalar
+    pairing — CLOSED
     (2026-09-08, second pass): the missing ingredient was a
     consistent canonical representative for the three faces
     ``θ(a,b) = ⟨b,θ♯a⟩ = −⟨a,θ♯b⟩`` of the sharp-pairing scalar.
@@ -498,7 +662,7 @@ def prove_theta_invariance(
     return _zero_theorem(
         "poisson_generalized_invariance",
         "ρ(x)⟨y,z⟩₊ = ⟨x∘_θ y, z⟩₊ + ⟨y, x∘_θ z⟩₊ on "
-        "(TM)₀ ⊕ (T*M)_θ ([C'5], total anchor)",
+        "(TM)₀ ⊕ (T*M)_θ ([C'5], (2.6) anchor ρ = θ♯ω)",
         [Sum(lhs, Neg(rhs))],
         engine,
         registry,

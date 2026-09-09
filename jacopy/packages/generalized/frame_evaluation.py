@@ -18,8 +18,9 @@ Component dictionary produced here:
 * ``⟨form[0⊕e^a, 0⊕e^b]_θ, e_c⟩ = γ̃_c^{ab}`` — the Koszul side of
   the Poisson generalized double reproduces the TILDE anholonomy
   (PDF 12i, now read as a 14h component);
-* ``⟨e^c, ρ(0 ⊕ e^b)⟩ = θ(e^b, e^c)`` — the total anchor's form leg
-  decomposes into the bivector components.
+* ``⟨e^c, ρ(0 ⊕ e^b)⟩ = θ(e^b, e^c)`` — the (2.6) anchor
+  ``ρ(U+ω) = θ♯ω`` decomposes into the bivector components on the
+  coframe (pure frame vectors are killed: ``ρ(e_a ⊕ 0) = 0``).
 
 Everything is engine-normalized; honest-fail throughout.
 """
@@ -253,9 +254,9 @@ def prove_anchor_components(
     *,
     registry: Optional[PropertyRegistry] = None,
 ) -> Tuple[ProofChain, Theorem]:
-    """``⟨e^c, ρ(0 ⊕ e^b)⟩ = θ(e^b, e^c)`` — the total anchor's
-    form leg decomposes into the BIVECTOR COMPONENTS on the
-    coframe."""
+    """``⟨e^c, ρ(0 ⊕ e^b)⟩ = θ(e^b, e^c)`` — the (2.6) anchor
+    ``ρ(U+ω) = θ♯ω`` decomposes into the BIVECTOR COMPONENTS on
+    the coframe."""
     co = fr.dual()
     lhs = Pairing(
         co.field(c_up), SharpVF(P.pi, co.field(b_up))
@@ -283,6 +284,6 @@ def prove_anchor_components(
         from_axioms=(
             "total anchor + sharp evaluation definitions",
         ),
-        notes="ρ(U+ω) = U + θ♯ω on the basis",
+        notes="ρ(0 ⊕ e^b) = θ♯e^b on the basis (Watamura (2.6))",
         label="anchor components normalize to 0",
     )

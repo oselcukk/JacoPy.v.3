@@ -174,7 +174,9 @@ def hodge(omega: Expr, g: Metric) -> HodgeStar:
         except ImportError:  # pragma: no cover
             AffineMetric = ()
         if isinstance(g, AffineMetric):
-            g = Metric(g.name)
+            # The context carries its bundle (2026-09-09 audit,
+            # finding 7): preserve it so the dimension survives.
+            g = Metric(g.name, bundle=g.bundle)
         else:
             raise TypeError(
                 "hodge second argument must be a Metric "

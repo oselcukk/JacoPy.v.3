@@ -225,6 +225,32 @@ class NambuSharpLinearityDefinition(Definition):
             "Nambu sharp linearity: Π(fω + η) = f·Πω + Πη"
         )
 
+    def _scalar_split(self, a: Expr):
+        """``(scalars, core)`` — pull ALL certainly-scalar factors
+        out of a Product slot, whatever their position (scalars are
+        central: degree-0 factors commute with everything, so the
+        split is value-preserving)."""
+        from jacopy.core.expr import Product
+
+        if not (
+            isinstance(a, Product) and len(a.children) >= 2
+        ):
+            return None
+        scalars = [
+            c
+            for c in a.children
+            if is_scalar_function(c, self._registry)
+        ]
+        if not scalars or len(scalars) == len(a.children):
+            return None
+        rest = [
+            c
+            for c in a.children
+            if not is_scalar_function(c, self._registry)
+        ]
+        core = rest[0] if len(rest) == 1 else Product(*rest)
+        return scalars, core
+
     def matches(self, expr: Expr) -> bool:
         if not (
             isinstance(expr, NambuSharpVF)
@@ -234,13 +260,7 @@ class NambuSharpLinearityDefinition(Definition):
         a = expr.omega
         if isinstance(a, (Sum, Neg)) or a == Integer(0):
             return True
-        from jacopy.core.expr import Product
-
-        if isinstance(a, Product) and len(a.children) >= 2:
-            return is_scalar_function(
-                a.children[0], self._registry
-            )
-        return False
+        return self._scalar_split(a) is not None
 
     def rewrite(self, expr: Expr) -> Expr:
         from jacopy.core.expr import Product
@@ -252,10 +272,8 @@ class NambuSharpLinearityDefinition(Definition):
             return Sum(*(expr.with_slots(c) for c in a.children))
         if isinstance(a, Neg):
             return Neg(expr.with_slots(a.arg))
-        scalar = a.children[0]
-        rest = a.children[1:]
-        core = rest[0] if len(rest) == 1 else Product(*rest)
-        return Product(scalar, expr.with_slots(core))
+        scalars, core = self._scalar_split(a)
+        return Product(*scalars, expr.with_slots(core))
 
 
 def nambu_koszul_bracket(

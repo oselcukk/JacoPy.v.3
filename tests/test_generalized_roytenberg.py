@@ -38,12 +38,13 @@ def test_roytenberg_all_off_is_standard_dorfman(setup):
 
 def test_roytenberg_tilde_r_is_theta_double(setup):
     # THE 14g statement: the Poisson-case Roytenberg bracket yields
-    # the verified Courant structure.
+    # the verified Courant structure — the TRIANGULAR θ-double
+    # (2026-09-09 audit, finding 2: not Watamura's trivial-TM one).
     reg, f, om, et, H, U, V, N = setup
     chain, thm = prove_roytenberg_is_theta_double_under_poisson(
         N, U, om, V, et, registry=reg
     )
-    assert "Poisson generalized double" in thm.statement
+    assert "TRIANGULAR θ-double" in thm.statement
 
 
 def test_roytenberg_theta_identification_needs_poisson(setup):
@@ -70,5 +71,5 @@ def test_full_roytenberg_symmetric_part_is_d_theta(setup):
     chain, thm = prove_full_roytenberg_symmetric_part(
         N, H, U, om, V, et, registry=reg
     )
-    assert "D_θ survives" in thm.statement
+    assert "triangular coboundary" in thm.statement
     assert len(chain.steps) == 2

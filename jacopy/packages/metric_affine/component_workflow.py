@@ -184,7 +184,14 @@ class ComponentInput:
         engine: Optional[ExpansionEngine] = None,
     ) -> Expr:
         """Normalize ``expr`` with the package engine PLUS the
-        substitution rules for this data set."""
+        substitution rules for this data set.
+
+        The caller's ``engine`` is NEVER mutated: a fresh engine is
+        layered per call, so data-set rules cannot accumulate in a
+        shared engine and leak between evaluations (2026-09-09
+        audit, finding 4 — the result must depend on the expression
+        and THIS data set only, not on prior calls)."""
+        from jacopy.proof.expansion import ExpansionEngine
         from jacopy.packages.metric_affine.engine import (
             metric_affine_engine,
         )
@@ -192,14 +199,20 @@ class ComponentInput:
             _normalized_by,
         )
 
-        eng = (
+        base = (
             engine
             if engine is not None
             else metric_affine_engine(registry=registry)
         )
-        eng.register(IndexedSumUnrollDefinition(self))
-        eng.register(SubstituteComponentsDefinition(self))
-        eng.register(ConcreteDeltaDefinition(self))
+        eng = ExpansionEngine(
+            [
+                IndexedSumUnrollDefinition(self),
+                SubstituteComponentsDefinition(self),
+                ConcreteDeltaDefinition(self),
+            ]
+        )
+        for d_ in base.definitions:
+            eng.register(d_)
         return _normalized_by(eng, expr, registry)
 
 
@@ -287,22 +300,30 @@ class SubstituteComponentsDefinition(Definition):
 
 class ConcreteDeltaDefinition(Definition):
     """On a DECLARED finite frame the index labels denote distinct
-    basis positions: ``δ^a_b → 0`` for distinct concrete labels and
-    ``→ 1`` for equal ones (the audit's 'fixed basis positions'
-    datum, now part of the input declaration)."""
+    basis positions: ``δ^a_b → 0`` when BOTH labels are declared
+    concrete positions (equal labels already collapse to ``1`` at
+    construction). A BOUND (dummy) label is structurally distinct
+    from a concrete one without denoting a different position, so
+    it stays symbolic until the enclosing sum is unrolled —
+    zeroing it under the sum falsifies ``Σ_s δ^s_0 = 1``
+    (2026-09-09 audit, finding 3)."""
 
     anchor = KroneckerDelta
 
     def __init__(self, data: ComponentInput) -> None:
         self._d = data
         self.name = (
-            "concrete basis positions: δ^a_b = [a = b]"
+            "concrete basis positions: δ^a_b = [a = b] "
+            "(both labels concrete)"
         )
 
     def matches(self, expr: Expr) -> bool:
         if self._d._dim is None:
             return False
-        return isinstance(expr, KroneckerDelta)
+        if not isinstance(expr, KroneckerDelta):
+            return False
+        idx = self._d._indices
+        return expr.upper in idx and expr.lower in idx
 
     def rewrite(self, expr: Expr) -> Expr:
         return (
