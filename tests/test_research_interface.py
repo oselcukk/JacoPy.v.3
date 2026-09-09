@@ -415,3 +415,12 @@ def test_rotated_exceptional_metric_invariance_closes_with_a_large_budget():
     x1, x2, x3 = T3.section(U, om2, om5), T3.section(V, et2, et5), T3.section(W, ze2, ze5)
     suite = AxiomSuite(data.transport(Psi), registry=reg, structures=(N3, N6), expand_max_steps=200000)
     assert suite.metric_invariance(x1, x2, x3).all_closed
+
+
+def test_default_probe_can_be_requested_repeatedly(gt):
+    reg, f, h, U, V, W, om, et, mu, N, T = gt
+    suite = AxiomSuite(_standard(T), registry=reg, structures=(N,))
+    e1, e2 = T.section(U, om), T.section(V, et)
+    assert suite.anchor_morphism(e1, e2).all_closed
+    assert suite.anchor_morphism(e1, e2).all_closed      # second request: same probe, no re-declaration
+    assert suite.right_leibniz(e1, e2, f).all_closed

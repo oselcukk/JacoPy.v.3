@@ -320,8 +320,16 @@ class AxiomSuite:
         name, suffix = "ħ", ""
         while f"{name}{suffix}" in avoid:
             suffix += "′"
-        (probe,) = functions(f"{name}{suffix}", registry=self.registry)
-        return probe
+        full = f"{name}{suffix}"
+        # one declaration per name and registry: the registry refuses a
+        # second `functions(...)` of the same symbol, and a suite asks
+        # for its probe once per check
+        cache = getattr(self, "_probe_cache", None)
+        if cache is None:
+            cache = self._probe_cache = {}
+        if full not in cache:
+            (cache[full],) = functions(full, registry=self.registry)
+        return cache[full]
 
     @property
     def last_report(self) -> List[str]:
