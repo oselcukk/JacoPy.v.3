@@ -384,3 +384,34 @@ def test_metric_invariance_needs_the_r_valued_action_on_the_exceptional_bundle()
     assert AxiomSuite(good, registry=reg, structures=(N3, N6)).metric_invariance(x1, x2, x3).all_closed
     rep = AxiomSuite(naive, registry=reg, structures=(N3, N6)).metric_invariance(x1, x2, x3)
     assert not rep.all_closed and rep.results[1].residual is not None
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("JACOPY_RUN_VERY_SLOW"),
+    reason="~14 min closure (4-form component 765 s); set JACOPY_RUN_VERY_SLOW=1",
+)
+def test_rotated_exceptional_metric_invariance_closes_with_a_large_budget():
+    from jacopy.core.wedge import Wedge
+    from jacopy.central.tangent.cartan import L as Lie
+
+    reg = PropertyRegistry()
+    U, V, W = vector_fields("U V W")
+    om2, et2, ze2 = forms("ω₂ η₂ ζ₂", degree=2)
+    om5, et5, ze5 = forms("ω₅ η₅ ζ₅", degree=5)
+    N3, N6 = nambu_structure("Π₃", p=2), nambu_structure("Π₆", p=5)
+    T3 = SectionType.exceptional()
+    data = AlgebroidData(
+        bracket=Bracket.from_components(T3, exceptional_courant_bracket), anchor=lambda e: e[0],
+        pairing=lambda a, b: (exceptional_pairing_two(a[0], a[1], b[0], b[1]), exceptional_pairing_five(*a, *b)),
+        D=lambda p2, p5: T3.section(Integer(0), d(p2), d(p5)),
+        lie_R=lambda e, r1, r4: (Lie(e[0], r1), Sum(Lie(e[0], r4), Neg(Wedge(r1, d(e[1]))))),
+    )
+    Psi = BlockMatrix(
+        T3,
+        [[1, Map(N3.sharp_vf, "Π₃"), Map(N6.sharp_vf, "Π₆") + Map(lambda w: boxtimes(N3, w), "⊛")],
+         [0, 1, 0], [0, 0, 1]],
+        name="Ψ_Π",
+    )
+    x1, x2, x3 = T3.section(U, om2, om5), T3.section(V, et2, et5), T3.section(W, ze2, ze5)
+    suite = AxiomSuite(data.transport(Psi), registry=reg, structures=(N3, N6), expand_max_steps=200000)
+    assert suite.metric_invariance(x1, x2, x3).all_closed
