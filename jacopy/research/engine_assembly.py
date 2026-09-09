@@ -48,6 +48,7 @@ class WedgeGradedOrderDefinition(Definition):
 
     def _sorted(self, e: Wedge):
         from jacopy.algebra.derivation import degree_of
+        from jacopy.algorithms.normalize_alternating import _sort_key
 
         items = []
         for c in e.children:
@@ -58,7 +59,11 @@ class WedgeGradedOrderDefinition(Definition):
             if k is None:
                 return None
             items.append((c, k))
-        target = sorted(items, key=lambda it: (it[1], it[0]._repr_inner()))
+        # the SAME key as the simplifier's odd-degree sort
+        # (normalize_alternating._sort_key): two canonical orders on
+        # the same wedge would rewrite each other forever (2026-09-09
+        # non-convergence catch on the exceptional 5-form Jacobi).
+        target = sorted(items, key=lambda it: _sort_key(it[0]))
         if [c for c, _ in target] == list(e.children):
             return None
         cur, sign = items[:], 0

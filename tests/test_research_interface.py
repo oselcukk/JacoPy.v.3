@@ -215,3 +215,44 @@ def test_antisymmetrize_is_alternating_in_the_named_indices():
     anti = antisymmetrize(sym, (a1, a2, a3), unit_weight=True)
     swapped = swap_indices(anti, a1, a2)
     assert simplify(Sum(anti, swapped), reg) == Integer(0)
+
+
+# ---- the exceptional 5-form Jacobi, closed by the linear split ------ #
+
+
+def _exceptional_triple():
+    reg = PropertyRegistry()
+    U, V, W = vector_fields("U V W")
+    om2, et2, ze2 = forms("ω₂ η₂ ζ₂", degree=2)
+    om5, et5, ze5 = forms("ω₅ η₅ ζ₅", degree=5)
+    slots5 = vector_fields("X₁ X₂ X₃ X₄ X₅")
+    N3 = nambu_structure("Π₃", p=2)
+    return reg, N3, (U, om2, om5, V, et2, et5, W, ze2, ze5), slots5
+
+
+def test_exceptional_jacobi_five_splits_and_cross_part_closes():
+    from jacopy.packages.drinfeld.examples import prove_exceptional_jacobi_five
+
+    reg, N3, args, slots5 = _exceptional_triple()
+    chain, assumptions = prove_exceptional_jacobi_five(
+        N3, *args, slots5, registry=reg, cite_dorfman=True
+    )
+    rules = [s.rule for s in chain.steps]
+    assert any("linear split" in r for r in rules)
+    assert any("cross Jacobiator" in r for r in rules)
+    assert assumptions == ("Dorfman Leibniz-Jacobi at p = 5 (CITED)",)
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("JACOPY_RUN_SLOW"),
+    reason="~35 s closure; set JACOPY_RUN_SLOW=1 to run",
+)
+def test_exceptional_jacobi_five_closes_in_full():
+    from jacopy.packages.drinfeld.examples import prove_exceptional_jacobi_five
+
+    reg, N3, args, slots5 = _exceptional_triple()
+    chain, assumptions = prove_exceptional_jacobi_five(
+        N3, *args, slots5, registry=reg
+    )
+    assert len(chain.steps) > 100          # the Dorfman leg is proven, not cited
+    assert "CITED" not in " ".join(assumptions)

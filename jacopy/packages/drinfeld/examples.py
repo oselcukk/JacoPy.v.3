@@ -400,6 +400,132 @@ def prove_exceptional_right_leibniz(
     return chains[0], chains[1]
 
 
+def _exceptional_cross(x2: Expr, y2: Expr) -> Expr:
+    """The 5-form cross-term of ``[x, y]_exc``: ``C(x, y) = −y₂ ∧ dx₂``."""
+    return Neg(Wedge(y2, d(x2)))
+
+
+def prove_exceptional_jacobi_five(
+    N,
+    U: Expr,
+    om2: Expr,
+    om5: Expr,
+    V: Expr,
+    et2: Expr,
+    et5: Expr,
+    W: Expr,
+    ze2: Expr,
+    ze5: Expr,
+    slots5,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    cite_dorfman: bool = False,
+    max_steps: int = 60000,
+) -> Tuple[ProofChain, Tuple[str, ...]]:
+    """The 5-form component of the Leibniz–Jacobi identity of the
+    exceptional Courant bracket,
+
+        [x,[y,z]]₅ − [[x,y],z]₅ − [y,[x,z]]₅ = 0,
+
+    closed by LINEARITY instead of brute force (2026-09-09): the
+    brute 5-slot expansion of three nested brackets does not finish
+    (>900 s), but the bracket's 5-form slot is ``L(x, y₅) + C(x₂, y₂)``
+    with ``L`` the Dorfman formula and ``C`` the cross-term, so the
+    Jacobiator splits EXACTLY as
+
+        J₅ = J₅^{Dorfman}(U,ω₅; V,η₅; W,ζ₅) + J₅^{cross}(ω₂,η₂,ζ₂; U,V,W),
+
+    where ``J₅^{cross} = ℒ_U C(y,z) + C(x₂,[y,z]₂) − C([x,y]₂,z₂)
+    + ι_W dC(x,y) − ℒ_V C(x,z) − C(y₂,[x,z]₂)``. Three legs:
+
+    1. the split identity, at FORM level (no slot evaluation);
+    2. ``J₅^{cross} = 0``, at FORM level (graded Leibniz of ``ℒ``,
+       ``ι``, ``d`` over the wedge + the 2-form Dorfman bracket);
+    3. ``J₅^{Dorfman} = 0`` — the degree-general Dorfman Leibniz–Jacobi
+       theorem (6.C), PROVEN here on the 5 slots (~30 s) unless
+       ``cite_dorfman=True``, in which case it is recorded as a cited
+       library theorem (the slow test suite proves it).
+
+    Returns the chain and the tuple of assumption labels."""
+    from jacopy.proof.step import ProofStep
+    from jacopy.packages.drinfeld.double import (
+        dorfman_double,
+        prove_dorfman_jacobi_form,
+    )
+    from jacopy.packages.poisson.tilde import _normalized_by
+    from jacopy.proof.strategies import ProofFailure
+    from jacopy.research.engine_assembly import assemble_engine
+
+    exc = exceptional_courant_bracket
+    j1 = exc(U, om2, om5, *exc(V, et2, et5, W, ze2, ze5))[2]
+    j2 = exc(*exc(U, om2, om5, V, et2, et5), W, ze2, ze5)[2]
+    j3 = exc(V, et2, et5, *exc(U, om2, om5, W, ze2, ze5))[2]
+    J_exc = Sum(j1, Neg(j2), Neg(j3))
+
+    D = dorfman_double
+    d1 = D(U, om5, *D(V, et5, W, ze5))[1]
+    d2 = D(*D(U, om5, V, et5), W, ze5)[1]
+    d3 = D(V, et5, *D(U, om5, W, ze5))[1]
+    J_dorf = Sum(d1, Neg(d2), Neg(d3))
+
+    def dorf2(xv, x2, yv, y2):
+        return Sum(_L(xv, y2), Neg(_iota(yv, d(x2))))
+
+    C = _exceptional_cross
+    yz2, xy2, xz2 = dorf2(V, et2, W, ze2), dorf2(U, om2, V, et2), dorf2(U, om2, W, ze2)
+    J_cross = Sum(
+        _L(U, C(et2, ze2)),
+        C(om2, yz2),
+        Neg(C(xy2, ze2)),
+        _iota(W, d(C(om2, et2))),
+        Neg(_L(V, C(om2, ze2))),
+        Neg(C(et2, xz2)),
+    )
+
+    steps = []
+    split = Sum(J_exc, Neg(J_dorf), Neg(J_cross))
+    eng = assemble_engine(split, registry=registry, structures=(N,))
+    for label, node in (
+        ("5-form Jacobiator = Dorfman Jacobiator + cross Jacobiator (linear split)", split),
+        ("cross Jacobiator normalizes to 0 (form level)", J_cross),
+    ):
+        nf = _normalized_by(eng, node, registry)
+        if nf != Integer(0):
+            raise ProofFailure(
+                f"exceptional 5-form Jacobi: {label} FAILS — residual "
+                + nf._repr_inner()[:160]
+            )
+        steps.append(
+            ProofStep(node, Integer(0), rule=label, justification="engine normal form")
+        )
+    if cite_dorfman:
+        steps.append(
+            ProofStep(
+                J_dorf,
+                Integer(0),
+                rule="Dorfman 5-form Leibniz-Jacobi (cited library theorem, 6.C)",
+                justification="cited: prove_dorfman_jacobi_form, degree-general",
+                provenance_tag="theorem",
+            )
+        )
+        assumptions = ("Dorfman Leibniz-Jacobi at p = 5 (CITED)",)
+    else:
+        chain_d, used = prove_dorfman_jacobi_form(
+            U, om5, V, et5, W, ze5, _probe(registry), slots5,
+            registry=registry, max_steps=max_steps,
+        )
+        steps.extend(chain_d.steps)
+        assumptions = tuple(t.name for t in used)
+    return ProofChain(steps), assumptions
+
+
+def _probe(registry):
+    from jacopy.central.objects import functions
+
+    (f,) = functions("f_probe", registry=registry)
+    return f
+
+
 # ------------------------------------------------------------------- #
 # 6.H.2 — multivector interior, the ⊛ map, decomposition readings      #
 # ------------------------------------------------------------------- #
