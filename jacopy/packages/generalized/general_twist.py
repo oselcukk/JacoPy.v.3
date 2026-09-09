@@ -333,16 +333,47 @@ def _cited_transport_theorem(
     return chain, theorem
 
 
-def _require_declared(alg: Algebroid, prop: str, what: str) -> None:
-    """Honest-fail precondition check (2026-09-09 audit, finding 1):
-    a transport theorem may cite an initial-bracket axiom ONLY when
-    that axiom is actually declared on the context."""
-    if not alg.declares(prop):
+def _require_some_structure(alg: Algebroid) -> None:
+    """A Ψ-transport needs SOMETHING declared to transport: a bare
+    bracket honest-fails (2026-09-09 audit, finding 1)."""
+    if not alg.declarations:
         raise ProofFailure(
-            f"the transport of {what} needs the initial "
-            f"bracket's declared {prop!r} — not declared on "
-            f"algebroid {alg.name!r}"
+            "the Ψ-transport needs a declared algebroid "
+            f"structure on {alg.name!r} — nothing is declared, "
+            "so there is nothing to transport (not even the "
+            "conditional form is minted)"
         )
+
+
+def _conditional_transport_theorem(
+    name,
+    statement,
+    target,
+    instance,
+    engine,
+    registry,
+    *,
+    notes,
+    label,
+) -> Tuple[ProofChain, Theorem]:
+    """The CONDITIONAL (structural-only) transport: lhs = target,
+    rhs = the Ψ-carried instance — NOT zero. Every step holds with
+    no axiom of the initial data (2026-09-09 recheck, finding A)."""
+    structural = _structural_step(
+        name, target, instance, engine, registry, label=label
+    )
+    chain = ProofChain([structural])
+    theorem = Theorem(
+        name=name,
+        statement=statement,
+        lhs=target,
+        rhs=instance,
+        proof=chain,
+        generality="generic-function",
+        from_axioms=("Ψ/Ψ⁻¹ invertibility + linearity",),
+        notes=notes,
+    )
+    return chain, theorem
 
 
 def prove_general_twist_bilinearity(
@@ -447,13 +478,7 @@ def prove_general_twist_jacobi(
     (2026-09-09 audit, findings 1 and 6). A bracket declaring
     nothing at all honest-fails: there is no structure to
     transport."""
-    if not alg.declarations:
-        raise ProofFailure(
-            "the Ψ-transport needs a declared algebroid "
-            f"structure on {alg.name!r} — nothing is declared, "
-            "so there is nothing to transport (not even the "
-            "conditional form is minted)"
-        )
+    _require_some_structure(alg)
     engine = general_twist_engine(
         alg, registry, structure_rules=False
     )
@@ -536,18 +561,27 @@ def prove_general_twist_symmetric_part(
     v: Expr,
     *,
     registry: Optional[PropertyRegistry] = None,
+    declare_r_axioms: bool = False,
 ) -> Tuple[ProofChain, Theorem]:
     """The symmetric part transports as the PRIMED Bourbaki data:
 
     ``[u,v]' + [v,u]' = 𝔻'g'(u,v)``,
-    ``𝔻' = Ψ⁻¹∘𝔻``, ``g'(u,v) = g(Ψu, Ψv)``
+    ``𝔻' = Ψ⁻¹∘𝔻``, ``g'(u,v) = g(Ψu, Ψv)``.
 
-    — cited from the initial bracket's DECLARED (6.11) instance at
-    ``(Ψu, Ψv)`` (honest-fail without the ``symmetric-part``
-    declaration; 2026-09-09 audit, finding 1)."""
-    _require_declared(
-        alg, "symmetric-part", "the (6.11) symmetric part"
-    )
+    The cited (6.11) instance lives in the R-VALUED layer
+    (``BMetric``/``BDop``), which NO central declaration certifies —
+    the scalar ``symmetric-part`` flag speaks about ``EMetric``, a
+    different node family with no verified identification between
+    the two data sets (2026-09-09 recheck, finding A). Hence:
+
+    * ``declare_r_axioms=True`` — the caller EXPLICITLY declares
+      (6.11) for the R-valued data ``(g, 𝔻)`` used here; the full
+      zero theorem is minted with that declaration on record;
+    * default — only the CONDITIONAL/structural identity is
+      returned (``lhs = target``, ``rhs`` = the Ψ-carried instance,
+      NOT zero), every step of which needs no axiom of the initial
+      data."""
+    _require_some_structure(alg)
     engine = general_twist_engine(alg, registry)
     B = alg.bracket
     pu, pv = PsiSec(u), PsiSec(v)
@@ -563,8 +597,34 @@ def prove_general_twist_symmetric_part(
         twisted_bracket(alg, v, u),
         Neg(twisted_d(twisted_metric(u, v))),
     )
+    name = f"general_twist_symmetric_part_{alg.name}"
+    label = (
+        "twisted symmetric part equals Ψ⁻¹ of the initial "
+        "instance — structural"
+    )
+    if not declare_r_axioms:
+        return _conditional_transport_theorem(
+            name,
+            "STRUCTURAL identity only: [u,v]' + [v,u]' − "
+            "𝔻'g'(u,v) = Ψ⁻¹ of the initial (6.11) combination "
+            "at (Ψu, Ψv), with 𝔻' = Ψ⁻¹∘𝔻 and g' = g(Ψ·,Ψ·). "
+            "The zero conclusion needs (6.11) FOR THE R-VALUED "
+            "data (g = BMetric, 𝔻 = BDop) — no central scalar "
+            "declaration certifies it and it is NOT established "
+            "here; pass declare_r_axioms=True to declare it "
+            "explicitly (13j)",
+            target,
+            instance,
+            engine,
+            registry,
+            notes=(
+                "PDF 13j: the primed operators 𝔻', g' — "
+                "conditional form (2026-09-09 recheck, finding A)"
+            ),
+            label=label,
+        )
     return _cited_transport_theorem(
-        f"general_twist_symmetric_part_{alg.name}",
+        name,
         "[u,v]' + [v,u]' = 𝔻'g'(u,v) with 𝔻' = Ψ⁻¹∘𝔻 and "
         "g' = g(Ψ·,Ψ·) — the Bourbaki data transports with the "
         "primed operators separated out (13j)",
@@ -577,15 +637,13 @@ def prove_general_twist_symmetric_part(
         engine,
         registry,
         from_axioms=(
-            "(6.11) symmetric part (declared instance at "
-            "(Ψu, Ψv))",
+            "(6.11) symmetric part for the R-VALUED data — "
+            "EXPLICITLY declared by the caller "
+            "(declare_r_axioms=True); instance at (Ψu, Ψv)",
             "Ψ/Ψ⁻¹ invertibility + linearity",
         ),
         notes="PDF 13j: the primed operators 𝔻', g'",
-        label=(
-            "twisted symmetric part equals Ψ⁻¹ of the initial "
-            "instance — structural"
-        ),
+        label=label,
     )
 
 
@@ -596,23 +654,30 @@ def prove_general_twist_invariance(
     w: Expr,
     *,
     registry: Optional[PropertyRegistry] = None,
+    declare_r_axioms: bool = False,
 ) -> Tuple[ProofChain, Theorem]:
     """Metric invariance transports with the primed data:
 
     ``ℒ^R_{ρ'(u)} g'(v,w) = g'([u,v]', w) + g'(v, [u,w]')``
 
-    — cited from the initial (7.8) DECLARED instance at
-    ``(Ψu, Ψv, Ψw)`` (the ℒ^R operator itself is unchanged: it
-    reads only the anchor direction, and ``ρ'(u) = ρ(Ψu)``);
-    honest-fail without the ``metric-invariance`` declaration
-    (2026-09-09 audit, finding 1)."""
+    — the ℒ^R operator itself is unchanged (it reads only the
+    anchor direction, and ``ρ'(u) = ρ(Ψu)``).
+
+    The cited (7.8) instance lives in the R-VALUED layer
+    (``BLieRE``/``BMetric``), which NO central declaration
+    certifies — the scalar ``metric-invariance`` flag speaks about
+    ``EMetric`` (2026-09-09 recheck, finding A). Hence:
+
+    * ``declare_r_axioms=True`` — the caller EXPLICITLY declares
+      (7.8) for the R-valued data ``(g, ℒ^R)`` used here; the full
+      zero theorem is minted with that declaration on record;
+    * default — only the CONDITIONAL/structural identity is
+      returned (``rhs`` = the instance, NOT zero)."""
     from jacopy.packages.generalized.bourbaki_structure import (
         BLieRE,
     )
 
-    _require_declared(
-        alg, "metric-invariance", "the (7.8) metric invariance"
-    )
+    _require_some_structure(alg)
     engine = general_twist_engine(alg, registry)
     pu, pv, pw = PsiSec(u), PsiSec(v), PsiSec(w)
     B = alg.bracket
@@ -634,8 +699,34 @@ def prove_general_twist_invariance(
             )
         ),
     )
+    name = f"general_twist_invariance_{alg.name}"
+    label = (
+        "twisted invariance equals the initial instance — "
+        "structural"
+    )
+    if not declare_r_axioms:
+        return _conditional_transport_theorem(
+            name,
+            "STRUCTURAL identity only: ℒ^R_{ρ'(u)} g'(v,w) − "
+            "g'([u,v]', w) − g'(v, [u,w]') equals the initial "
+            "(7.8) combination at (Ψu, Ψv, Ψw), with "
+            "g' = g(Ψ·,Ψ·) and ρ' = ρ∘Ψ. The zero conclusion "
+            "needs (7.8) FOR THE R-VALUED data (g = BMetric, "
+            "ℒ^R = BLieRE) — no central scalar declaration "
+            "certifies it and it is NOT established here; pass "
+            "declare_r_axioms=True to declare it explicitly (13j)",
+            target,
+            instance,
+            engine,
+            registry,
+            notes=(
+                "PDF 13j: g' = g(Ψ·,Ψ·), ρ' = ρ∘Ψ — conditional "
+                "form (2026-09-09 recheck, finding A)"
+            ),
+            label=label,
+        )
     return _cited_transport_theorem(
-        f"general_twist_invariance_{alg.name}",
+        name,
         "ℒ^R_{ρ'(u)} g'(v,w) = g'([u,v]', w) + g'(v, [u,w]') — "
         "metric invariance transports through Ψ with the primed "
         "metric and anchor (13j)",
@@ -647,13 +738,11 @@ def prove_general_twist_invariance(
         engine,
         registry,
         from_axioms=(
-            "(7.8) metric invariance (declared instance at "
-            "(Ψu, Ψv, Ψw))",
+            "(7.8) metric invariance for the R-VALUED data — "
+            "EXPLICITLY declared by the caller "
+            "(declare_r_axioms=True); instance at (Ψu, Ψv, Ψw)",
             "Ψ/Ψ⁻¹ invertibility",
         ),
         notes="PDF 13j: g' = g(Ψ·,Ψ·), ρ' = ρ∘Ψ",
-        label=(
-            "twisted invariance equals the initial instance — "
-            "structural"
-        ),
+        label=label,
     )

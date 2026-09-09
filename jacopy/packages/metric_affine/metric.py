@@ -266,16 +266,33 @@ class InverseMetricComponent(Atom):
     (:class:`MetricInverseContractionDefinition`), well-posed by the
     metric's definitional non-degeneracy."""
 
-    __slots__ = ("_metric_name", "_first", "_second")
+    __slots__ = ("_metric_name", "_first", "_second", "_bundle")
 
-    def __init__(self, metric_name: str, first: str, second: str) -> None:
+    def __init__(
+        self,
+        metric_name: str,
+        first: str,
+        second: str,
+        *,
+        bundle=None,
+    ) -> None:
+        from jacopy.central.objects.bundle import TM
+
         self._metric_name = metric_name
         self._first = first
         self._second = second
+        # The FULL metric identity is (name, bundle): same-named
+        # metrics on different bundles have different inverse
+        # components (2026-09-09 recheck, finding C).
+        self._bundle = bundle if bundle is not None else TM
 
     @property
     def metric_name(self) -> str:
         return self._metric_name
+
+    @property
+    def bundle(self):
+        return self._bundle
 
     @property
     def upper(self) -> Tuple[str, str]:
@@ -300,35 +317,46 @@ class InverseMetricComponent(Atom):
         if renamed is None:
             return self
         return inverse_metric_component_named(
-            self._metric_name, *renamed
+            self._metric_name, *renamed, bundle=self._bundle
         )
 
     def _key(self) -> Any:
-        return (self._metric_name, self._first, self._second)
+        return (
+            self._metric_name,
+            self._first,
+            self._second,
+            self._bundle,
+        )
 
     def _repr_inner(self) -> str:
         return f"{self._metric_name}^{self._first}{self._second}"
 
 
 def inverse_metric_component_named(
-    metric_name: str, first: str, second: str
+    metric_name: str, first: str, second: str, *, bundle=None
 ) -> InverseMetricComponent:
     """``g^{ab}`` in canonical (sorted) index order — the symmetry of
     the inverse metric as a canonical form."""
     if first > second:
         first, second = second, first
-    return InverseMetricComponent(metric_name, first, second)
+    return InverseMetricComponent(
+        metric_name, first, second, bundle=bundle
+    )
 
 
 def inverse_metric_component(
     g: Metric, first, second
 ) -> InverseMetricComponent:
-    """``g^{ab}`` of the metric ``g`` (canonical index order)."""
+    """``g^{ab}`` of the metric ``g`` (canonical index order); the
+    metric's bundle travels into the component's identity."""
     from jacopy.central.objects.frame import _index_str
 
     g = as_metric_context(g)
     return inverse_metric_component_named(
-        g.name, _index_str(first), _index_str(second)
+        g.name,
+        _index_str(first),
+        _index_str(second),
+        bundle=g.bundle,
     )
 
 
@@ -382,6 +410,14 @@ class MetricInverseContractionDefinition(Definition):
         g_inv = factors[inv]
         g_val = factors[val]
         if g_inv.metric_name != g_val.metric_name:
+            return None
+        # identity check reaches the bundle too: g^{as} of one
+        # bundle must not contract a same-named metric's values on
+        # another bundle's frame (2026-09-09 recheck, finding C).
+        if (
+            g_inv.bundle != g_val.X.bundle
+            or g_inv.bundle != g_val.Y.bundle
+        ):
             return None
         up = [n for n in g_inv.index_names if n != dummy]
         low = [

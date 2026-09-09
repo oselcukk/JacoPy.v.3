@@ -99,17 +99,43 @@ def test_jacobi_without_declaration_is_conditional(setup):
 
 
 def test_twist_transports_bourbaki_data(setup):
+    from jacopy.core.expr import Integer
+
     reg, f, E, u, v, w = setup
+    # Full theorems need the EXPLICIT R-valued declaration: the
+    # central scalar flags certify EMetric, not BMetric/BLieRE
+    # (2026-09-09 recheck, finding A).
     chain, thm = prove_general_twist_symmetric_part(
-        E, u, v, registry=reg
+        E, u, v, registry=reg, declare_r_axioms=True
     )
     assert "𝔻' = Ψ⁻¹∘𝔻" in thm.statement
+    assert thm.rhs == Integer(0)
+    assert any("R-VALUED" in a for a in thm.from_axioms)
     chain2, thm2 = prove_general_twist_invariance(
-        E, u, v, w, registry=reg
+        E, u, v, w, registry=reg, declare_r_axioms=True
     )
     assert "g' = g(Ψ·,Ψ·)" in " ".join(
         (thm2.statement,) + thm2.from_axioms + (thm2.notes,)
     )
+    assert thm2.rhs == Integer(0)
+
+
+def test_bourbaki_transports_without_r_declaration_are_conditional(
+    setup,
+):
+    from jacopy.core.expr import Integer
+
+    reg, f, E, u, v, w = setup
+    # Without declare_r_axioms only the structural identity is
+    # recorded: rhs is the Ψ-carried instance, NOT zero.
+    for chain, thm in (
+        prove_general_twist_symmetric_part(E, u, v, registry=reg),
+        prove_general_twist_invariance(E, u, v, w, registry=reg),
+    ):
+        assert thm.rhs != Integer(0)
+        assert "STRUCTURAL identity only" in thm.statement
+        assert "NOT established here" in thm.statement
+        assert len(chain.steps) == 1
 
 
 def test_right_leibniz_transport_needs_the_initial_axiom(setup):

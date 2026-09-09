@@ -263,11 +263,16 @@ class SubstituteComponentsDefinition(Definition):
                 FrameField,
             )
 
+            # identity includes the BUNDLE: a same-named frame on
+            # another bundle must not receive this data set's
+            # values (2026-09-09 recheck, finding B)
             if not (
                 isinstance(X, FrameField)
                 and isinstance(Y, FrameField)
                 and X.base_name == fr.name
                 and Y.base_name == fr.name
+                and X.bundle == fr.bundle
+                and Y.bundle == fr.bundle
             ):
                 return None
             return d.metric_component(
@@ -284,6 +289,8 @@ class SubstituteComponentsDefinition(Definition):
                 and isinstance(b, CoframeField)
                 and a.base_name == fr.name
                 and b.base_name == fr.name
+                and a.bundle == fr.bundle
+                and b.bundle == fr.bundle
             ):
                 return None
             return d.pi_component(
@@ -357,9 +364,12 @@ class IndexedSumUnrollDefinition(Definition):
             return False
         if not isinstance(expr, IndexedSum):
             return False
-        return getattr(expr._range, "name", None) == (
-            self._d.frame.name
-        ) or expr._range is self._d.frame
+        # FULL frame identity (name + bundle), never name alone: a
+        # same-named frame on another bundle keeps its own rank and
+        # stays symbolic here (2026-09-09 recheck, finding B).
+        return expr._range is self._d.frame or (
+            expr._range == self._d.frame
+        )
 
     def rewrite(self, expr: Expr) -> Expr:
         from jacopy.central.objects.frame import FrameIndex
