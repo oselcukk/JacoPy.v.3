@@ -141,3 +141,36 @@ def test_theta_structures_reject_higher_order():
     om, et = forms("ω η", degree=2)
     with pytest.raises(ValueError, match="order-1"):
         theta_dorfman(N2, U, om, V, et)
+
+
+def test_theta_jacobi_needs_poisson(setup):
+    from jacopy.packages.generalized.poisson_generalized import (
+        prove_theta_jacobi,
+    )
+
+    reg, f, h, om, et, ze, U, V, W, X, N = setup
+    with pytest.raises(ProofFailure, match="declared Poisson"):
+        prove_theta_jacobi(
+            N, U, om, V, et, W, ze, h, X,
+            registry=reg, declare_poisson=False,
+        )
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("JACOPY_RUN_SLOW"),
+    reason="~60 s closure (6.J instance families); set JACOPY_RUN_SLOW=1",
+)
+def test_theta_jacobi_c1_closes(setup):
+    # [C'1] of the (2.6)-(2.7) structure: vector component (tilde
+    # calculus Jacobi) + form component (Koszul Jacobi), declared FI.
+    from jacopy.packages.generalized.poisson_generalized import (
+        prove_theta_jacobi,
+    )
+
+    reg, f, h, om, et, ze, U, V, W, X, N = setup
+    chain, thm = prove_theta_jacobi(
+        N, U, om, V, et, W, ze, h, X, registry=reg
+    )
+    assert len(chain.steps) == 2
+    assert all(s.children for s in chain.steps)
+    assert "[C'1]" in thm.statement

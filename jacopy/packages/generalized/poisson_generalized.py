@@ -23,6 +23,10 @@ Representation: the Phase 6 Nambu machinery at ``p = 1`` — a
 ``NambuPoissonStructure`` of order 1 IS a Poisson bivector ``θ``.
 Inventory, all for the (2.6)-(2.7) structure itself:
 
+* **[C'1]** — the Leibniz–Jacobi identity, vector component (the
+  tilde-calculus Jacobi) and form component (the Koszul Jacobi),
+  under the declared Poisson condition by the 6.J stall-time
+  difference test (:func:`prove_theta_jacobi`; closed 2026-09-10);
 * **[C'2]** — ``ρ`` is a bracket morphism: ``θ♯`` intertwines the
   Koszul and Lie brackets under the declared Poisson condition
   (:func:`prove_theta_anchor_morphism`);
@@ -415,6 +419,220 @@ def prove_theta_symmetric_part(
             "form component normalizes to 0",
         ),
     )
+
+
+def _theta_jacobi_instances(engine, N, forms3, vectors, h, registry):
+    """The declared-FI instance families that close the Leibniz–Jacobi
+    identity of ``(TM)₀ ⊕ (T*M)_θ`` by the 6.J stall-time difference
+    test, for THREE 1-forms, the lift ``vectors`` (the three section
+    vectors for the vector component, the evaluation vector for the
+    form component) and the probe ``h`` (2026-09-10 — the closure of
+    the 7.B.2b gap):
+
+    * the composed-action FI faces of 6.J (probe scalars ``h`` and
+      the pairings ``⟨c, X⟩``) and the p = 1 deep instances;
+    * FI on the EXACT forms ``d⟨c, X⟩``;
+    * the declared FI as the vector ``R′(a,b) = [θa,θb] − θ[a,b]_θ =
+      0``, flat and ``[X,·]``-lifted, paired with ``c``;
+    * the vector-field Jacobi identity (a THEOREM) on ``(X, θa, θb)``
+      paired with ``c``.
+
+    Returns ``[(name, normalized lhs, proof chain)]`` with provenance
+    tags separating axiom instances from theorem instances."""
+    import itertools
+
+    from jacopy.core.pairing import Pairing
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _cite_fi_instances,
+        _p1_deep_instances,
+    )
+    from jacopy.packages.drinfeld.twist import r_twist
+    from jacopy.packages.poisson.nambu import nambu_koszul_bracket
+    from jacopy.packages.poisson.tilde import _normalized_by
+
+    def ME(*a):
+        return MultiEval(
+            N.pi, *a, alternating=True, slot_kind="covector"
+        )
+
+    def inst(tag, S, rule, prov, lifts):
+        chain = ProofChain(
+            [
+                ProofStep(
+                    S,
+                    Integer(0),
+                    rule=rule,
+                    justification="instance + congruence",
+                    provenance_tag=prov,
+                )
+            ]
+        )
+        out = []
+        for ltag, seed in lifts:
+            for sgn, g in (((lambda x: x), "p"), (Neg, "n")):
+                nf = _normalized_by(engine, sgn(seed), registry)
+                if nf != Integer(0):
+                    out.append((f"{tag}{ltag}_{g}", nf, chain))
+        return out
+
+    deep = []
+    pairs = list(itertools.permutations(forms3, 2))
+    for X in vectors:
+        for a, b in pairs:
+            _cite_fi_instances(engine, N, a, b, X, h, registry)
+            for c in forms3:
+                _cite_fi_instances(
+                    engine, N, a, b, X, Pairing(c, X), registry
+                )
+            deep.extend(
+                _p1_deep_instances(engine, N, a, b, X, h, registry)
+            )
+            for c in forms3:
+                theta = d(Pairing(c, X))
+                S = Sum(
+                    ME(theta, nambu_koszul_bracket(N, a, b)),
+                    ME(d(ME(theta, b)), a),
+                    Neg(ME(d(ME(theta, a)), b)),
+                )
+                deep += inst(
+                    "fiexact_pair",
+                    S,
+                    "declared FI on the exact form d⟨c,X⟩ "
+                    "(+ congruence lifts)",
+                    "axiom",
+                    (("", S), ("_d", d(S)), ("_X", Act(X, S))),
+                )
+                R = r_twist(N, a, b)
+                deep += inst(
+                    "rprime_pair",
+                    Pairing(c, lie_bracket(X, R)),
+                    "declared FI: R′(a,b) = [θa,θb] − θ[a,b]_θ = 0, "
+                    "[X,·]-lifted and paired",
+                    "axiom",
+                    (
+                        ("", Pairing(c, lie_bracket(X, R))),
+                        ("_flat", Pairing(c, R)),
+                    ),
+                )
+                Pa, Pb = N.sharp_vf(a), N.sharp_vf(b)
+                JV = Sum(
+                    lie_bracket(X, lie_bracket(Pa, Pb)),
+                    Neg(lie_bracket(lie_bracket(X, Pa), Pb)),
+                    Neg(lie_bracket(Pa, lie_bracket(X, Pb))),
+                )
+                deep += inst(
+                    "vfjacobi_pair",
+                    Pairing(c, JV),
+                    "vector-field Jacobi identity (theorem) on "
+                    "(X, θa, θb), paired",
+                    "theorem",
+                    (("", Pairing(c, JV)),),
+                )
+    return deep
+
+
+def prove_theta_jacobi(
+    N: NambuPoissonStructure,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    W: Expr,
+    zeta: Expr,
+    h: Expr,
+    X: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    declare_poisson: bool = True,
+    max_rounds: int = 15,
+) -> Tuple[ProofChain, Theorem]:
+    """[C'1] for the Poisson generalized double ``(TM)₀ ⊕ (T*M)_θ``:
+    the Leibniz–Jacobi identity
+
+        [x,[y,z]]_{D,θ} = [[x,y]_{D,θ}, z]_{D,θ} + [y,[x,z]_{D,θ}]_{D,θ}
+
+    component-wise — the VECTOR component probed on ``h`` (it is the
+    Dorfman-type Jacobi of the tilde calculus ``(ℒ̃, ι̃, d̃)``, i.e. the
+    (D.5)–(D.7) family), the FORM component evaluated on ``X`` (the
+    Koszul Jacobi identity in the Nambu language) — under the DECLARED
+    Poisson condition, by the 6.J stall-time difference test against
+    the instance families of :func:`_theta_jacobi_instances`. Honest
+    fail without the declaration (2026-09-10; closes the gap left open
+    when the structure was corrected to (2.6)-(2.7) on 2026-09-09)."""
+    from jacopy.core.pairing import Pairing
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        _stall_difference_prove,
+    )
+
+    _require_poisson(N)
+    x, y, z = (U, omega), (V, eta), (W, zeta)
+
+    def B(p, q):
+        return theta_dorfman(N, *p, *q)
+
+    Jv = Sum(
+        B(x, B(y, z))[0],
+        Neg(B(B(x, y), z)[0]),
+        Neg(B(y, B(x, z))[0]),
+    )
+    Jf = Sum(
+        B(x, B(y, z))[1],
+        Neg(B(B(x, y), z)[1]),
+        Neg(B(y, B(x, z))[1]),
+    )
+    nodes = (
+        (Act(Jv, h), "vector component on the probe", (U, V, W)),
+        (Pairing(Jf, X), "form component on the evaluation vector", (X,)),
+    )
+    if not declare_poisson:
+        engine = _tilde_engine(N, registry, declare_fi=False)
+        residual = _normalize(engine, nodes[1][0], registry)
+        raise ProofFailure(
+            "the Leibniz-Jacobi identity of (TM)₀ ⊕ (T*M)_θ needs the "
+            "declared Poisson condition; residual "
+            + residual._repr_inner()[:140]
+        )
+    steps: List[ProofStep] = []
+    for node, label, lifts in nodes:
+        engine = _tilde_engine(N, registry, declare_fi=True)
+        instances = _theta_jacobi_instances(
+            engine, N, (omega, eta, zeta), lifts, h, registry
+        )
+        chain = _stall_difference_prove(
+            engine, node, instances, registry, max_rounds=max_rounds
+        )
+        head = ProofStep(
+            node,
+            Integer(0),
+            rule=f"Leibniz-Jacobi, {label}: normalize + cite declared-FI "
+            "instances (6.J stall-time difference test)",
+            justification="see sub-steps",
+        )
+        for s in chain.steps:
+            head.add_child(s)
+        steps.append(head)
+    chain = ProofChain(steps)
+    theorem = Theorem(
+        name="poisson_generalized_leibniz_jacobi",
+        statement=(
+            "[x,[y,z]] = [[x,y],z] + [y,[x,z]] for the tilde-Dorfman "
+            "bracket of (TM)₀ ⊕ (T*M)_θ ([C'1]; vector component = the "
+            "tilde-calculus Jacobi, form component = the Koszul Jacobi) "
+            "under the declared Poisson condition"
+        ),
+        lhs=Act(Jv, h),
+        rhs=Integer(0),
+        proof=chain,
+        generality="generic-function",
+        from_axioms=(
+            "declared Poisson condition (FI instances: composed-action, "
+            "exact-form, R′-lift faces)",
+            "vector-field Jacobi identity (theorem instances)",
+            "tilde-Dorfman + Koszul/tilde calculus definitions",
+        ),
+        notes="PDF 14f / Watamura §2.2 — [C'1] closed 2026-09-10",
+    )
+    return chain, theorem
 
 
 def prove_theta_d_pairing_value(
