@@ -27,6 +27,17 @@ the declared Poisson condition
 genuine Poisson structure is an independent datum, not the derived
 one.
 
+THE R-side Ševera theorem (2026-09-10, closing the 7.B.2c gap): the
+Leibniz–Jacobi defect of the R-twisted bracket is EXACTLY the
+Lichnerowicz–Poisson differential ``d_θR = [θ,R]_SN`` contracted
+with the three forms — ``J_R − J_θ = (ι̃_ζ ι̃_η ι̃_ω d_θR, 0)`` for any
+bivector and trivector, declaration-free
+(:func:`prove_r_twisted_jacobi_defect_is_dtheta_r`, with
+:func:`lichnerowicz_d` the intrinsic-Palais ``d_θ`` in the Nambu
+dialect); with [C'1] of the untwisted structure this is *R-twisted
+Courant ⟺ d_θR = 0*, the R-flux dual of ``dH = 0``
+(:func:`prove_r_twisted_jacobi`).
+
 The tilde-interior structure rules
 (:class:`TildeInteriorFormLinearityDefinition`,
 :class:`TildeInteriorAnticommuteDefinition`) are the exact mirrors
@@ -415,6 +426,378 @@ def prove_r_twisted_anchor_morphism(
         engine=engine,
         max_steps=max_steps,
     )
+
+
+# ------------------------------------------------------------------ #
+# The R-side Ševera theorem: Jacobi defect = d_θR (2026-09-10)         #
+# ------------------------------------------------------------------ #
+
+
+def _tilde_multivector_degree(e: Expr, registry) -> Optional[int]:
+    """Multivector degree in the Nambu dialect: tilde contractions
+    lower it by one; scalar factors are transparent."""
+    from jacopy.central.tangent.schouten import multivector_degree
+
+    if isinstance(e, Act) and isinstance(e.op, TildeInterior):
+        m = _tilde_multivector_degree(e.arg, registry)
+        return None if m is None else m - 1
+    if isinstance(e, Neg):
+        return _tilde_multivector_degree(e.arg, registry)
+    if isinstance(e, Sum):
+        ms = {_tilde_multivector_degree(c, registry) for c in e.children}
+        return ms.pop() if len(ms) == 1 else None
+    if isinstance(e, Product):
+        total = 0
+        for c in e.children:
+            if is_scalar_function(c, registry):
+                continue
+            m = _tilde_multivector_degree(c, registry)
+            if m is None:
+                return None
+            total += m
+        return total
+    return multivector_degree(e, registry)
+
+
+def lichnerowicz_calculus(N: NambuPoissonStructure, registry=None):
+    """The tilde calculus of ``θ`` in the NAMBU dialect as a
+    :class:`~jacopy.central.calculus.BracketCalculus`: anchor ``θ♯``
+    (``N.sharp_vf``), bracket the Koszul bracket, forms = multivectors.
+    Its ``d`` is the Lichnerowicz–Poisson differential ``d_θ = [θ,·]_SN``
+    — evaluated on 1-forms by the intrinsic Palais rule."""
+    from jacopy.core.symbolic_degree import Degree
+    from jacopy.algebra.derivation import degree_of
+    from jacopy.central.calculus import BracketCalculus
+    from jacopy.packages.poisson.nambu import nambu_koszul_bracket
+
+    def form_degree(e, reg):
+        m = _tilde_multivector_degree(e, reg)
+        if m is None:
+            raise ValueError("multivector degree undetermined")
+        return Degree.const(m)
+
+    def section_test(e):
+        if _tilde_multivector_degree(e, registry) is not None:
+            return False
+        try:
+            return degree_of(e, None) == Degree.const(1)
+        except ValueError:
+            return False
+
+    return BracketCalculus(
+        f"lichnerowicz-{N.pi._repr_inner()}",
+        anchor=N.sharp_vf,
+        bracket=lambda a, b: nambu_koszul_bracket(N, a, b),
+        d_name="d_θ",
+        lie_name="L̃",
+        form_degree=form_degree,
+        section_test=section_test,
+    )
+
+
+def lichnerowicz_d(N: NambuPoissonStructure, R: Expr, registry=None) -> Expr:
+    """``d_θ R`` — the Lichnerowicz–Poisson differential of a
+    multivector (the intrinsic ``d`` of :func:`lichnerowicz_calculus`)."""
+    return Act(lichnerowicz_calculus(N, registry).d, R)
+
+
+def _peel_tilde_contractions(e: Expr):
+    args = []
+    while isinstance(e, Act) and isinstance(e.op, TildeInterior):
+        args.append(e.op.form)
+        e = e.arg
+    return (e, list(reversed(args))) if args else None
+
+
+class TildeContractionAsEvalDefinition(Definition):
+    """Tilde contractions of a multivector ARE its evaluations
+    (definitional, the tilde face of interior-product evaluation):
+
+        ⟨γ, ι̃_b ι̃_a V⟩ → V(a, b, γ),    (ι̃_b ι̃_a V)(h) → V(a, b, dh),
+        β(Y…, ι̃_b ι̃_a V) → V(a, b, ι_{Y…} β)
+
+    for a contraction that is a VECTOR (multivector degree 1)."""
+
+    name = (
+        "tilde contraction = evaluation: ⟨γ, ι̃…V⟩ = V(…, γ), "
+        "(ι̃…V)(h) = V(…, dh), β(Y…, ι̃…V) = V(…, ι_{Y…}β)"
+    )
+    anchor = None
+
+    def __init__(self, registry=None) -> None:
+        self._r = registry
+
+    def _is_contraction_vector(self, e: Expr) -> bool:
+        return (
+            _peel_tilde_contractions(e) is not None
+            and _tilde_multivector_degree(e, self._r) == 1
+        )
+
+    def matches(self, e: Expr) -> bool:
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.core.pairing import Pairing
+        from jacopy.central.objects import PVector
+
+        if isinstance(e, Pairing):
+            return self._is_contraction_vector(e.X)
+        if isinstance(e, Act) and is_scalar_function(e.arg, self._r):
+            return self._is_contraction_vector(e.op)
+        if isinstance(e, MultiEval) and e.args:
+            return self._is_contraction_vector(e.args[-1]) and not isinstance(
+                e.head, PVector
+            )
+        return False
+
+    def rewrite(self, e: Expr) -> Expr:
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.core.pairing import Pairing
+        from jacopy.central.objects.interior import Interior
+        from jacopy.central.tangent.exterior import d
+
+        if isinstance(e, Pairing):
+            V, args = _peel_tilde_contractions(e.X)
+            return MultiEval(V, *args, e.alpha, alternating=True, slot_kind="covector")
+        if isinstance(e, Act):
+            V, args = _peel_tilde_contractions(e.op)
+            return MultiEval(V, *args, d(e.arg), alternating=True, slot_kind="covector")
+        V, args = _peel_tilde_contractions(e.args[-1])
+        beta = e.head
+        for Y in e.args[:-1]:
+            beta = Act(Interior(Y), beta)
+        return MultiEval(V, *args, beta, alternating=True, slot_kind="covector")
+
+
+class ThetaEvalOfContractionInteriorDefinition(Definition):
+    """``θ(a, ι_v β) → −V(…, ι_{θ♯a} β)`` for a tilde-contraction
+    vector ``v = ι̃…V`` — derived from ``θ(a,b) = ⟨b, θ♯a⟩``, interior
+    evaluation ``(ι_v β)(Y) = β(v, Y)`` and alternation (``θ(ι_v β,
+    a)`` carries the opposite sign)."""
+
+    def __init__(self, N: NambuPoissonStructure, registry=None) -> None:
+        from jacopy.core.multi_eval import MultiEval
+
+        self._N = N
+        self._r = registry
+        self.anchor = MultiEval
+        self.name = (
+            "θ(a, ι_v β) = −V(…, ι_{θ♯a} β) for a tilde-contraction v"
+        )
+
+    def _site(self, e: Expr):
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.central.objects.interior import Interior
+
+        if not (isinstance(e, MultiEval) and e.head == self._N.pi and e.arity == 2):
+            return None
+        for i in (0, 1):
+            b = e.args[i]
+            if (
+                isinstance(b, Act)
+                and isinstance(b.op, Interior)
+                and _peel_tilde_contractions(b.op.vector) is not None
+                and _tilde_multivector_degree(b.op.vector, self._r) == 1
+            ):
+                return i
+        return None
+
+    def matches(self, e: Expr) -> bool:
+        return self._site(e) is not None
+
+    def rewrite(self, e: Expr) -> Expr:
+        from jacopy.core.multi_eval import MultiEval
+        from jacopy.central.objects.interior import Interior
+
+        i = self._site(e)
+        a, b = e.args[1 - i], e.args[i]
+        V, args = _peel_tilde_contractions(b.op.vector)
+        out = MultiEval(
+            V, *args, Act(Interior(self._N.sharp_vf(a)), b.arg),
+            alternating=True, slot_kind="covector",
+        )
+        return Neg(out) if i == 1 else out
+
+
+def _lichnerowicz_engine(N, registry):
+    from jacopy.central.calculus import IntrinsicDDefinition
+
+    eng = _engine(N, registry, declare_fi=False)
+    eng.register(IntrinsicDDefinition(lichnerowicz_calculus(N, registry), registry))
+    eng.register(TildeContractionAsEvalDefinition(registry))
+    eng.register(ThetaEvalOfContractionInteriorDefinition(N, registry))
+    return eng
+
+
+def prove_r_twisted_jacobi_defect_is_dtheta_r(
+    N: NambuPoissonStructure,
+    R: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    W: Expr,
+    zeta: Expr,
+    h: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    max_steps: int = 40000,
+) -> Tuple[ProofChain, Theorem]:
+    """THE R-side Ševera theorem [Watamura §3], declaration-free: the
+    Leibniz–Jacobi defect of the R-twisted bracket relative to the
+    untwisted one is EXACTLY the Lichnerowicz–Poisson differential of
+    ``R`` contracted with the three forms,
+
+        vec(J_R − J_θ)(h) = (d_θR)(ω, η, ζ, dh),   form(J_R − J_θ) = 0,
+
+    for ANY bivector ``θ`` and trivector ``R`` (the vector component
+    probed on ``h``; the form components coincide because the R-term
+    is vector-valued and the form slot reads only forms). Corollary
+    (with [C'1] of the untwisted structure under the Poisson
+    condition, :func:`~jacopy.packages.generalized.poisson_generalized.
+    prove_theta_jacobi`): the R-twisted structure is a Courant
+    algebroid ⟺ ``d_θR = 0`` — the R-flux dual of ``dH = 0``."""
+    from jacopy.core.multi_eval import MultiEval
+    from jacopy.central.tangent.exterior import d
+    from jacopy.packages.generalized.poisson_generalized import theta_dorfman
+
+    _require_poisson(N)
+    x, y, z = (U, omega), (V, eta), (W, zeta)
+
+    def BR(p, q):
+        return r_twisted_theta_dorfman(N, R, *p, *q)
+
+    def B0(p, q):
+        return theta_dorfman(N, *p, *q)
+
+    def jac(B, k):
+        return Sum(B(x, B(y, z))[k], Neg(B(B(x, y), z)[k]), Neg(B(y, B(x, z))[k]))
+
+    vec_defect = Act(Sum(jac(BR, 0), Neg(jac(B0, 0))), h)
+    form_defect = Sum(jac(BR, 1), Neg(jac(B0, 1)))
+    dtheta = MultiEval(
+        lichnerowicz_d(N, R, registry), omega, eta, zeta, d(h),
+        alternating=True, slot_kind="covector",
+    )
+    engine = _lichnerowicz_engine(N, registry)
+
+    def nf(node):
+        from jacopy.algorithms.product_rule import product_rule
+        from jacopy.algorithms.simplify import simplify
+
+        cur = node
+        for _ in range(14):
+            expanded, _s = engine.expand(cur, max_steps=max_steps)
+            reduced = simplify(product_rule(expanded, registry), registry)
+            if reduced == cur:
+                break
+            cur = reduced
+        return cur
+
+    steps: List[ProofStep] = []
+    for label, node in (
+        ("vector Jacobi defect minus (d_θR)(ω,η,ζ,dh) normalizes to 0",
+         Sum(vec_defect, Neg(dtheta))),
+        ("form Jacobi defect normalizes to 0 (the R-term has no form part)",
+         form_defect),
+    ):
+        residual = nf(node)
+        if residual != Integer(0):
+            raise ProofFailure(
+                f"r_twisted_jacobi_defect: {label} FAILS — residual "
+                + residual._repr_inner()[:160]
+            )
+        steps.append(ProofStep(node, Integer(0), rule=label, justification="engine normal form"))
+    chain = ProofChain(steps)
+    theorem = Theorem(
+        name="r_twisted_jacobi_defect_is_dtheta_r",
+        statement=(
+            "J_R − J_θ = (ι̃_ζ ι̃_η ι̃_ω d_θR, 0): the Leibniz-Jacobi defect of "
+            "the R-twisted tilde-Dorfman bracket is the Lichnerowicz-Poisson "
+            "differential d_θR = [θ,R]_SN contracted with the three forms "
+            "(any bivector, any trivector) — hence, with [C'1] under the "
+            "Poisson condition, R-twisted Courant ⟺ d_θR = 0 (Watamura §3)"
+        ),
+        lhs=vec_defect,
+        rhs=dtheta,
+        proof=chain,
+        generality="generic-function",
+        from_axioms=(
+            "R-twisted / tilde-Dorfman + Lichnerowicz d_θ (intrinsic Palais) definitions",
+            "tilde-contraction = evaluation (definitional)",
+        ),
+        notes="PDF 14f.iii / Watamura §3 — the R-flux dual of dH = 0",
+    )
+    return chain, theorem
+
+
+def prove_r_twisted_jacobi(
+    N: NambuPoissonStructure,
+    R: Expr,
+    U: Expr,
+    omega: Expr,
+    V: Expr,
+    eta: Expr,
+    W: Expr,
+    zeta: Expr,
+    h: Expr,
+    X: Expr,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+    cite_theta_jacobi: bool = True,
+) -> Tuple[ProofChain, Theorem]:
+    """[C'1] for the R-twisted bracket under the DECLARED Poisson
+    condition AND the DECLARED closure ``d_θR = 0``: the defect
+    theorem plus [C'1] of the untwisted structure (cited as a library
+    theorem, or PROVEN in full with ``cite_theta_jacobi=False`` —
+    about two minutes) plus the declared instance ``(d_θR)(ω,η,ζ,dh)
+    = 0``. Both declarations are recorded; nothing is inferred."""
+    from jacopy.core.multi_eval import MultiEval
+    from jacopy.central.tangent.exterior import d
+    from jacopy.packages.generalized.poisson_generalized import prove_theta_jacobi
+
+    chain_d, thm_d = prove_r_twisted_jacobi_defect_is_dtheta_r(
+        N, R, U, omega, V, eta, W, zeta, h, registry=registry
+    )
+    steps = list(chain_d.steps)
+    dtheta = MultiEval(
+        lichnerowicz_d(N, R, registry), omega, eta, zeta, d(h),
+        alternating=True, slot_kind="covector",
+    )
+    steps.append(ProofStep(
+        dtheta, Integer(0),
+        rule="declared closure d_θR = 0 (instance at (ω,η,ζ,dh))",
+        justification="axiom instance of the opt-in R-flux closure",
+        provenance_tag="axiom",
+    ))
+    if cite_theta_jacobi:
+        steps.append(ProofStep(
+            Integer(0), Integer(0),
+            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition "
+            "(cited library theorem: prove_theta_jacobi)",
+            justification="cited", provenance_tag="theorem",
+        ))
+        assumptions = ("declared Poisson condition ([C'1] CITED)", "declared d_θR = 0")
+    else:
+        chain_t, _ = prove_theta_jacobi(
+            N, U, omega, V, eta, W, zeta, h, X, registry=registry
+        )
+        steps.extend(chain_t.steps)
+        assumptions = ("declared Poisson condition ([C'1] proven)", "declared d_θR = 0")
+    chain = ProofChain(steps)
+    theorem = Theorem(
+        name="r_twisted_leibniz_jacobi",
+        statement=(
+            "[x,[y,z]]_R = [[x,y]_R,z]_R + [y,[x,z]_R]_R for the R-twisted "
+            "tilde-Dorfman bracket — [C'1] under the declared Poisson condition "
+            "and the declared R-flux closure d_θR = 0 (Watamura §3)"
+        ),
+        lhs=chain_d.steps[0].before,
+        rhs=Integer(0),
+        proof=chain,
+        generality="generic-function",
+        from_axioms=assumptions + (thm_d.name,),
+        notes="PDF 14f.iii / Watamura §3",
+    )
+    return chain, theorem
 
 
 def prove_derived_r_vanishes_under_poisson(

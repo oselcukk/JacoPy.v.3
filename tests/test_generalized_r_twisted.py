@@ -102,3 +102,37 @@ def test_r_twisted_courant_relation(setup):
         N, R, U, om, V, et, registry=reg
     )
     assert len(chain.steps) == 2
+
+
+def test_r_twisted_jacobi_defect_is_dtheta_r(setup):
+    # The R-side Ševera theorem (2026-09-10): J_R − J_θ = (ι̃ι̃ι̃ d_θR, 0),
+    # declaration-free — any bivector, any trivector.
+    from jacopy.central.objects import vector_fields as _vf
+    from jacopy.packages.generalized.r_twisted import (
+        prove_r_twisted_jacobi_defect_is_dtheta_r,
+    )
+
+    reg, f, h, om, et, U, V, N, R = setup
+    (W,) = _vf("W")
+    (ze,) = forms("ζ", degree=1)
+    chain, thm = prove_r_twisted_jacobi_defect_is_dtheta_r(
+        N, R, U, om, V, et, W, ze, h, registry=reg
+    )
+    assert len(chain.steps) == 2
+    assert "d_θR = 0" in thm.statement
+    assert not any(a.startswith("declared") for a in thm.from_axioms)
+
+
+def test_r_twisted_jacobi_under_declared_closure(setup):
+    from jacopy.central.objects import vector_fields as _vf
+    from jacopy.packages.generalized.r_twisted import prove_r_twisted_jacobi
+
+    reg, f, h, om, et, U, V, N, R = setup
+    W, X = _vf("W X")
+    (ze,) = forms("ζ", degree=1)
+    chain, thm = prove_r_twisted_jacobi(
+        N, R, U, om, V, et, W, ze, h, X, registry=reg
+    )
+    rules = [s.rule for s in chain.steps]
+    assert any("declared closure d_θR = 0" in r for r in rules)
+    assert any("CITED" in a for a in thm.from_axioms)
