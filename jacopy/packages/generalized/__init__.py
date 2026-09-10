@@ -115,6 +115,17 @@ from jacopy.packages.generalized.exceptional_rotation import (
     prove_rotated_vector_decomposition,
     rotated_exceptional_bracket,
 )
+from jacopy.packages.generalized.exceptional_double import (
+    exceptional_double,
+    exceptional_r_twist,
+    exceptional_r_twist_components,
+    exceptional_z_bracket,
+    prove_exceptional_r_twist_bidegree_split,
+    prove_exceptional_r_twist_symmetric_part,
+    prove_r22_reduces_to_lifted_cross_term,
+    prove_r25_is_lie_tilde_equivariance_defect,
+    prove_rotated_is_exceptional_double_plus_r,
+)
 from jacopy.packages.generalized.general_twist import (
     PsiInvSec,
     PsiSec,
@@ -208,6 +219,15 @@ __all__ = [
     "lichnerowicz_d",
     "prove_rotated_form_decomposition",
     "prove_rotated_vector_decomposition",
+    "exceptional_double",
+    "exceptional_r_twist",
+    "exceptional_r_twist_components",
+    "exceptional_z_bracket",
+    "prove_exceptional_r_twist_bidegree_split",
+    "prove_exceptional_r_twist_symmetric_part",
+    "prove_r22_reduces_to_lifted_cross_term",
+    "prove_r25_is_lie_tilde_equivariance_defect",
+    "prove_rotated_is_exceptional_double_plus_r",
     "prove_right_leibniz_from_r_invariance",
     "prove_roytenberg_h_is_twisted_dorfman",
     "prove_roytenberg_is_theta_double_under_poisson",
