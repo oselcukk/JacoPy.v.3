@@ -4,7 +4,8 @@ generalized double, with the anchor-defect structural theorem."""
 
 import pytest
 
-from jacopy.core.expr import Integer, Sum
+from jacopy.algebra.derivation import Act
+from jacopy.core.expr import Integer, Neg, Sum
 from jacopy.core.registry import PropertyRegistry
 from jacopy.central.objects import (
     PVector,
@@ -136,3 +137,29 @@ def test_r_twisted_jacobi_under_declared_closure(setup):
     rules = [s.rule for s in chain.steps]
     assert any("declared closure d_θR = 0" in r for r in rules)
     assert any("CITED" in a for a in thm.from_axioms)
+
+
+def test_r_twisted_jacobi_records_the_jacobiator_as_target(setup):
+    # F5 (2026-09-10 audit): lhs is J_R(h) itself, rhs 0; the chain
+    # carries the defect theorem, the declared closure instance and
+    # the cited [C'1] components with their real before/after.
+    from jacopy.central.objects import vector_fields as _vf
+    from jacopy.packages.generalized.r_twisted import prove_r_twisted_jacobi
+
+    reg, f, h, om, et, U, V, N, R = setup
+    W, X = _vf("W X")
+    (ze,) = forms("ζ", degree=1)
+    chain, thm = prove_r_twisted_jacobi(
+        N, R, U, om, V, et, W, ze, h, X, registry=reg
+    )
+    x, y, z = (U, om), (V, et), (W, ze)
+    B = lambda a, b: r_twisted_theta_dorfman(N, R, *a, *b)  # noqa: E731
+    target = Act(
+        Sum(B(x, B(y, z))[0], Neg(B(B(x, y), z)[0]), Neg(B(y, B(x, z))[0])),
+        h,
+    )
+    assert thm.lhs == target and thm.rhs == Integer(0)
+    assert len(chain.steps) == 5
+    assert chain.steps[0].before == target
+    assert chain.steps[0].children  # the defect sub-proof is attached
+    assert chain.steps[2].before != Integer(0)  # [C'1] cited on J_θ(h), not 0→0

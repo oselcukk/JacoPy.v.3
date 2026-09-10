@@ -4,6 +4,7 @@ exercised on the two twists of examples/bracket_twist_walkthrough."""
 
 import pytest
 
+from jacopy.algebra.derivation import Act
 from jacopy.core.expr import Integer, Neg, Product, Sum
 from jacopy.core.multi_eval import MultiEval
 from jacopy.core.registry import PropertyRegistry
@@ -424,3 +425,93 @@ def test_default_probe_can_be_requested_repeatedly(gt):
     assert suite.anchor_morphism(e1, e2).all_closed
     assert suite.anchor_morphism(e1, e2).all_closed      # second request: same probe, no re-declaration
     assert suite.right_leibniz(e1, e2, f).all_closed
+
+
+# ---- 2026-09-10 audit (POST_F685_REVIEW) pins ---------------------- #
+
+
+def test_wedge_order_grades_vector_sums_as_odd():
+    # F1: Z∧(X+Y) = −(X+Y)∧Z — a homogeneous vector SUM has wedge
+    # degree 1 even though its operator degree is 0.
+    from jacopy.core.wedge import Wedge
+    from jacopy.proof import show_equal
+    from jacopy.proof.expansion import ExpansionEngine
+    from jacopy.proof.strategies import ProofFailure
+    from jacopy.research.engine_assembly import (
+        WedgeGradedOrderDefinition,
+        _wedge_degree,
+    )
+
+    reg = PropertyRegistry()
+    X, Y, Z = vector_fields("Xs Ys Zs")
+    a = Sum(X, Y)
+    assert _wedge_degree(a, reg) == 1
+    rule = WedgeGradedOrderDefinition(reg)
+    node = Wedge(Z, a)
+    if rule.matches(node):
+        assert rule.rewrite(node) == Neg(Wedge(a, Z))
+    eng = ExpansionEngine()
+    eng.register(rule)
+    with pytest.raises(ProofFailure):
+        show_equal(Wedge(Z, a), Wedge(a, Z), registry=reg, engine=eng)
+
+
+def _annihilator_candidate(reg):
+    # Q = X(h)Y − Y(h)X with h = f·g: Q(h) = 0 although Q ≠ 0.
+    from jacopy.core.pairing import Pairing
+
+    f, g = functions("fa ga", registry=reg)
+    X, Y = vector_fields("Xa Ya")
+    (s,) = forms("sa", degree=1)
+    h = Product(f, g)
+    Q = Sum(Product(Act(X, h), Y), Neg(Product(Act(Y, h), X)))
+    T = SectionType.generalized_tangent()
+    z = Integer(0)
+    data = AlgebroidData(
+        bracket=Bracket(
+            T,
+            lambda u, v: T.section(
+                Product(Pairing(s, u[0]), Pairing(s, v[0]), Q), z
+            ),
+        ),
+        anchor=lambda e: z,
+        pairing=lambda u, v: (z,),
+        D=lambda p: T.zero(),
+    )
+    return data, T.section(X, s), h
+
+
+def test_composite_probe_is_rejected():
+    # F2: a composite probe (fresh atoms, dependent value) must not
+    # certify a non-zero symmetric defect.
+    reg = PropertyRegistry()
+    data, e, h = _annihilator_candidate(reg)
+    with pytest.raises(ValueError, match="SYMBOL"):
+        AxiomSuite(data, registry=reg, probe=h).symmetric_part(e, e)
+    assert not AxiomSuite(data, registry=reg).symmetric_part(e, e).all_closed
+
+
+def test_two_suites_share_a_registry_and_the_default_probe():
+    # F3: the default probe ħ is declared once per registry.
+    reg = PropertyRegistry()
+    data, e, _ = _annihilator_candidate(reg)
+    assert AxiomSuite(data, registry=reg).anchor_morphism(e, e).all_closed
+    assert AxiomSuite(data, registry=reg).anchor_morphism(e, e).all_closed
+
+
+@pytest.mark.parametrize("arity", [0, 1, 3])
+def test_metric_invariance_rejects_an_ill_typed_r_action(arity):
+    # F4: a pairing valued in R² needs an action returning 2 parts.
+    T = SectionType.generalized_tangent()
+    z = Integer(0)
+    (X,) = vector_fields("Xm")
+    (a,) = forms("am", degree=1)
+    data = AlgebroidData(
+        bracket=Bracket(T, lambda u, v: T.zero()),
+        anchor=lambda e: z,
+        pairing=lambda u, v: (z, z),
+        lie_R=lambda e, *parts: tuple(z for _ in range(arity)),
+    )
+    e = T.section(X, a)
+    with pytest.raises(ValueError, match="component"):
+        AxiomSuite(data).metric_invariance(e, e, e)

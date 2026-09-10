@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Optional, Sequence, Set
 
-from jacopy.core.expr import Expr, Neg, Product
+from jacopy.core.expr import Expr, Neg, Product, Sum
 from jacopy.core.registry import PropertyRegistry
 from jacopy.core.wedge import Wedge
 from jacopy.proof.expansion import Definition, ExpansionEngine
@@ -60,6 +60,14 @@ def _wedge_degree(c: Expr, registry) -> Optional[int]:
         return total
     if isinstance(c, Neg):
         return _wedge_degree(c.arg, registry)
+    if isinstance(c, Sum):
+        # a homogeneous sum grades like its terms; a vector SUM has
+        # operator degree 0 but wedge degree 1 (2026-09-10 audit, F1:
+        # falling through to degree_of sorted Z∧(X+Y) as even)
+        degrees = {_wedge_degree(k, registry) for k in c.children}
+        if len(degrees) == 1 and None not in degrees:
+            return degrees.pop()
+        return None
     try:
         return degree_of(c, registry).as_int()
     except ValueError:

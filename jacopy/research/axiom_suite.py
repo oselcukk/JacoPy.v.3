@@ -307,7 +307,22 @@ class AxiomSuite:
     def _fresh_probe(self, avoid: set) -> Expr:
         from jacopy.central.objects import functions
 
+        from jacopy.core.expr import Symbol
+        from jacopy.core.properties import Graded
+
         if self._probe_given:
+            if not isinstance(self.probe, Symbol):
+                # a COMPOSITE probe is not a faithful test even when
+                # its atoms are fresh: h = f·g is annihilated by the
+                # non-zero vector field X(h)Y − Y(h)X (2026-09-10
+                # audit, F2)
+                raise ValueError(
+                    f"the probe {self.probe._repr_inner()!r} is not a "
+                    "function SYMBOL — a vector-valued identity is a "
+                    "faithful test only on an independent scalar "
+                    "symbol (a composite such as f·g can be killed by "
+                    "a non-zero vector field); pass an atomic probe"
+                )
             if self.probe._repr_inner() in avoid:
                 raise ValueError(
                     f"the probe function {self.probe._repr_inner()!r} "
@@ -321,14 +336,18 @@ class AxiomSuite:
         while f"{name}{suffix}" in avoid:
             suffix += "′"
         full = f"{name}{suffix}"
-        # one declaration per name and registry: the registry refuses a
-        # second `functions(...)` of the same symbol, and a suite asks
-        # for its probe once per check
+        # one declaration per name and REGISTRY: a symbol already
+        # declared on this registry (by an earlier suite sharing it —
+        # 2026-09-10 audit, F3) is reused rather than re-declared
         cache = getattr(self, "_probe_cache", None)
         if cache is None:
             cache = self._probe_cache = {}
         if full not in cache:
-            (cache[full],) = functions(full, registry=self.registry)
+            sym = Symbol(full)
+            if self.registry is not None and self.registry.has(sym, Graded):
+                cache[full] = sym
+            else:
+                (cache[full],) = functions(full, registry=self.registry)
         return cache[full]
 
     @property
@@ -440,9 +459,22 @@ class AxiomSuite:
         if self.data.pairing is None or self.data.lie_R is None:
             raise ValueError("metric invariance needs a pairing and lie_R")
         br, g, LR = self.data.bracket, self.data.pairing, self.data.lie_R
-        lhs = LR(e1, *g(e2, e3))
-        r1 = g(br(e1, e2), e3)
-        r2 = g(e2, br(e1, e3))
+        g23 = tuple(g(e2, e3))
+        lhs = tuple(LR(e1, *g23))
+        r1 = tuple(g(br(e1, e2), e3))
+        r2 = tuple(g(e2, br(e1, e3)))
+        n = len(g23)
+        if n == 0:
+            raise ValueError("the pairing returned no components")
+        if not (len(lhs) == len(r1) == len(r2) == n):
+            raise ValueError(
+                "metric invariance: the pairing has "
+                f"{n} component(s) but lie_R returned {len(lhs)} "
+                f"(and the bracket-side pairings {len(r1)}/{len(r2)}) "
+                "— the R-valued action must map the pairing's value "
+                "space to itself (2026-09-10 audit, F4: a truncating "
+                "zip certified an ill-typed action)"
+            )
         rep = SuiteReport("metric invariance")
         for i, (l, a, b) in enumerate(zip(lhs, r1, r2)):
             comp = Sum(l, Neg(a), Neg(b))

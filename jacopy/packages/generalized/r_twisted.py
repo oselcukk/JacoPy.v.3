@@ -745,43 +745,90 @@ def prove_r_twisted_jacobi(
     cite_theta_jacobi: bool = True,
 ) -> Tuple[ProofChain, Theorem]:
     """[C'1] for the R-twisted bracket under the DECLARED Poisson
-    condition AND the DECLARED closure ``d_θR = 0``: the defect
-    theorem plus [C'1] of the untwisted structure (cited as a library
-    theorem, or PROVEN in full with ``cite_theta_jacobi=False`` —
-    about two minutes) plus the declared instance ``(d_θR)(ω,η,ζ,dh)
-    = 0``. Both declarations are recorded; nothing is inferred."""
+    condition AND the DECLARED closure ``d_θR = 0``. The recorded
+    target IS the Jacobiator (``lhs = J_R(h)``, ``rhs = 0``; 2026-09-10
+    audit, F5) and the chain shows the route:
+
+        J_R(h) → J_θ(h) + (d_θR)(ω,η,ζ,dh)     (defect theorem, sub-proof attached)
+        (d_θR)(ω,η,ζ,dh) → 0                   (declared closure instance)
+        J_θ(h) → 0                             ([C'1] vector component: cited, or proven)
+        form(J_R) → form(J_θ) → 0              (defect theorem; [C'1] form component)
+
+    ``cite_theta_jacobi=False`` runs [C'1] in full (about two minutes)
+    and attaches its steps. Both declarations are recorded; nothing is
+    inferred."""
     from jacopy.core.multi_eval import MultiEval
     from jacopy.central.tangent.exterior import d
-    from jacopy.packages.generalized.poisson_generalized import prove_theta_jacobi
+    from jacopy.packages.generalized.poisson_generalized import (
+        prove_theta_jacobi,
+        theta_dorfman,
+    )
 
     chain_d, thm_d = prove_r_twisted_jacobi_defect_is_dtheta_r(
         N, R, U, omega, V, eta, W, zeta, h, registry=registry
     )
-    steps = list(chain_d.steps)
+    x, y, z = (U, omega), (V, eta), (W, zeta)
+
+    def BR(p, q):
+        return r_twisted_theta_dorfman(N, R, *p, *q)
+
+    def B0(p, q):
+        return theta_dorfman(N, *p, *q)
+
+    def jac(B, k):
+        return Sum(B(x, B(y, z))[k], Neg(B(B(x, y), z)[k]), Neg(B(y, B(x, z))[k]))
+
+    jr_vec, j0_vec = Act(jac(BR, 0), h), Act(jac(B0, 0), h)
+    jr_form, j0_form = jac(BR, 1), jac(B0, 1)
     dtheta = MultiEval(
         lichnerowicz_d(N, R, registry), omega, eta, zeta, d(h),
         alternating=True, slot_kind="covector",
     )
-    steps.append(ProofStep(
-        dtheta, Integer(0),
-        rule="declared closure d_θR = 0 (instance at (ω,η,ζ,dh))",
-        justification="axiom instance of the opt-in R-flux closure",
-        provenance_tag="axiom",
-    ))
     if cite_theta_jacobi:
-        steps.append(ProofStep(
-            Integer(0), Integer(0),
-            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition "
-            "(cited library theorem: prove_theta_jacobi)",
-            justification="cited", provenance_tag="theorem",
-        ))
+        c1_vec = c1_form = None
         assumptions = ("declared Poisson condition ([C'1] CITED)", "declared d_θR = 0")
+        cite = " (cited library theorem: prove_theta_jacobi)"
     else:
         chain_t, _ = prove_theta_jacobi(
             N, U, omega, V, eta, W, zeta, h, X, registry=registry
         )
-        steps.extend(chain_t.steps)
+        c1_vec, c1_form = [chain_t.steps[0]], [chain_t.steps[1]]
         assumptions = ("declared Poisson condition ([C'1] proven)", "declared d_θR = 0")
+        cite = " (proven: prove_theta_jacobi, steps attached)"
+    steps = [
+        ProofStep(
+            jr_vec, Sum(j0_vec, dtheta),
+            rule="J_R(h) = J_θ(h) + (d_θR)(ω,η,ζ,dh) — the R-side Ševera defect theorem",
+            justification="engine normal form of the difference (sub-proof attached)",
+            children=[chain_d.steps[0]], provenance_tag="theorem",
+        ),
+        ProofStep(
+            dtheta, Integer(0),
+            rule="declared closure d_θR = 0 (instance at (ω,η,ζ,dh))",
+            justification="axiom instance of the opt-in R-flux closure",
+            provenance_tag="axiom",
+        ),
+        ProofStep(
+            j0_vec, Integer(0),
+            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition, "
+            "vector component on the probe" + cite,
+            justification="cited" if c1_vec is None else "proven",
+            children=c1_vec, provenance_tag="theorem",
+        ),
+        ProofStep(
+            jr_form, j0_form,
+            rule="form(J_R) = form(J_θ) — the R-term has no form part (defect theorem)",
+            justification="engine normal form of the difference (sub-proof attached)",
+            children=[chain_d.steps[1]], provenance_tag="theorem",
+        ),
+        ProofStep(
+            j0_form, Integer(0),
+            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition, "
+            "form component (paired with every X)" + cite,
+            justification="cited" if c1_form is None else "proven",
+            children=c1_form, provenance_tag="theorem",
+        ),
+    ]
     chain = ProofChain(steps)
     theorem = Theorem(
         name="r_twisted_leibniz_jacobi",
@@ -790,12 +837,13 @@ def prove_r_twisted_jacobi(
             "tilde-Dorfman bracket — [C'1] under the declared Poisson condition "
             "and the declared R-flux closure d_θR = 0 (Watamura §3)"
         ),
-        lhs=chain_d.steps[0].before,
+        lhs=jr_vec,
         rhs=Integer(0),
         proof=chain,
         generality="generic-function",
         from_axioms=assumptions + (thm_d.name,),
-        notes="PDF 14f.iii / Watamura §3",
+        notes="PDF 14f.iii / Watamura §3; lhs is the vector Jacobiator on the probe, "
+        "the form Jacobiator is carried in the chain",
     )
     return chain, theorem
 

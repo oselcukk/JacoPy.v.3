@@ -53,13 +53,19 @@ Poisson).
     (:func:`prove_r22_reduces_to_lifted_cross_term`) — so a Nambu-
     Poisson ``Π₃`` makes the first condition "``Π₆ + Π₃⊛Π₃`` kills the
     5-forms ``η₂ ∧ dω₂``": the exceptional structure couples the
-    hexavector to the trivector through the M-theory term;
+    ``Λ⁵ → TM`` block to the trivector through the M-theory term;
   - ``R′₂₅`` is the ``ℒ̃``-EQUIVARIANCE defect of ``Π̂``:
     ``ℒ̃_{ω₂}(Π̂η₅) − Π̂(ℒ_{Π₃ω₂}η₅)`` with the ``Π₃`` tilde Lie
     derivative (:func:`prove_r25_is_lie_tilde_equivariance_defect`);
-  - ``R′₅₅`` is the Nambu-type derived twist of the composite
-    hexavector map ``Π̂`` (its bracket-morphism fundamental identity
-    when ``Π̂`` is read as a single 6-vector — the (4.13) sum);
+  - ``R′₅₅`` is the anchor defect (bracket-morphism condition) of the
+    bundle map ``Π̂: Λ⁵ → TM`` for its own Koszul-type bracket
+    ``ℒ_{Π̂ω}η − ι_{Π̂η}dω``. NOTE (2026-09-10 audit, F6): ``Π̂`` is a
+    ``TM``-valued map, NOT a 6-vector in general — ``Π₃⊛Π₃`` is
+    alternating in its five covector slots but not in the sixth (the
+    paper's (4.13) has the free index ``c``; e.g. on ℝ⁵ with
+    ``Π₃ = e₀₁₂ + e₀₃₄``, ``⟨e⁰, ⊛(e⁰¹²³⁴)⟩ = 1`` although ``e⁰``
+    repeats). So ``R′₅₅ = 0`` is a condition on the map, not the
+    fundamental identity of a Nambu 6-vector;
 
 * the SYMMETRIC PART (:func:`prove_exceptional_r_twist_symmetric_part`):
 
@@ -106,8 +112,10 @@ def _iota(X: Expr, x: Expr) -> Expr:
 
 
 def pi_hat(N3, N6, om5: Expr) -> Expr:
-    """``Π̂ω₅ := Π₆ω₅ + (Π₃⊛Π₃)ω₅`` — the hexavector block of the
-    (4.10) twist (the (4.13) sum), as a map ``Λ⁵ → TM``."""
+    """``Π̂ω₅ := Π₆ω₅ + (Π₃⊛Π₃)ω₅`` — the ``Λ⁵ → TM`` block of the
+    (4.10) twist: the 6-vector ``Π₆`` plus the ``TM``-valued pentavector
+    ``Π₃⊛Π₃`` of (4.13) (NOT a 6-vector in general — alternating in the
+    five form slots only)."""
     return Sum(N6.sharp_vf(om5), boxtimes(N3, om5))
 
 
@@ -452,7 +460,7 @@ def prove_r22_reduces_to_lifted_cross_term(
         R′₂₂(ω₂,η₂) = Π̂(η₂ ∧ dω₂),   Π̂ = Π₆ + Π₃⊛Π₃
 
     — the Nambu derived twist of ``Π₃`` dies and the first Drinfel'd
-    condition becomes "the hexavector block kills the cross-term
+    condition becomes "the Λ⁵ → TM block kills the cross-term
     5-forms". Without the declaration the difference is the honest
     residual (``ProofFailure``)."""
     if not declare_fi:
@@ -473,7 +481,7 @@ def prove_r22_reduces_to_lifted_cross_term(
         "r22_reduces_to_lifted_cross_term",
         "R′₂₂(ω₂,η₂) = (Π₆ + Π₃⊛Π₃)(η₂∧dω₂) under the declared "
         "fundamental identity of Π₃ — the Nambu derived twist of Π₃ "
-        "vanishes and the cross-term lifted by the hexavector block "
+        "vanishes and the cross-term lifted by the Λ⁵ → TM block "
         "remains",
         [Act(diff, h)],
         engine,
@@ -503,7 +511,7 @@ def prove_r25_is_lie_tilde_equivariance_defect(
 ) -> Tuple[ProofChain, Theorem]:
     """``R′₂₅(ω₂,η₅) = ℒ̃_{ω₂}(Π̂η₅) − Π̂(ℒ_{Π₃ω₂}η₅)`` with
     ``ℒ̃_{ω₂}W = [Π₃ω₂,W] + Π₃(ι_W dω₂)`` the Π₃ tilde Lie
-    derivative — the second Drinfel'd condition says the hexavector
+    derivative — the second Drinfel'd condition says the Λ⁵ → TM
     block intertwines the tilde action on vectors with the Lie
     derivative along ``Π₃ω₂`` on 5-forms. Declaration-free."""
     from jacopy.packages.drinfeld.double import lie_tilde_nambu
@@ -520,7 +528,7 @@ def prove_r25_is_lie_tilde_equivariance_defect(
     return _zero_theorem(
         "r25_is_lie_tilde_equivariance_defect",
         "R′₂₅(ω₂,η₅) = ℒ̃_{ω₂}(Π̂η₅) − Π̂(ℒ_{Π₃ω₂}η₅) — the mixed "
-        "(2,5) condition is the ℒ̃-equivariance of the hexavector "
+        "(2,5) condition is the ℒ̃-equivariance of the Λ⁵ → TM "
         "block Π̂ = Π₆ + Π₃⊛Π₃",
         [Act(Sum(parts["25"], Neg(pred)), h)],
         engine,
