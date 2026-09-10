@@ -280,6 +280,7 @@ def assemble_engine(
     )
     from jacopy.central.objects.multivector_interior import (
         MultivectorInteriorDecomposableDefinition,
+        MultivectorInteriorDecomposableFormDefinition,
         MultivectorInteriorLinearityDefinition,
     )
     from jacopy.central.tangent.engine import tangent_engine
@@ -342,6 +343,7 @@ def assemble_engine(
     if "multivector_interior" in fam:
         add(MultivectorInteriorLinearityDefinition(registry), "multivector interiors present")
         add(MultivectorInteriorDecomposableDefinition(), "multivector interiors present")
+        add(MultivectorInteriorDecomposableFormDefinition(registry), "multivector interiors present")
     if "wedge" in fam:
         add(WedgeSumScalarDefinition(registry), "wedges present")
         add(FormProductToWedgeDefinition(registry), "wedges present")

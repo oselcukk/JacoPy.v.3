@@ -126,6 +126,13 @@ from jacopy.packages.generalized.exceptional_double import (
     prove_r25_is_lie_tilde_equivariance_defect,
     prove_rotated_is_exceptional_double_plus_r,
 )
+from jacopy.packages.generalized.dialect_bridge import (
+    prove_koszul_dialects_agree,
+    prove_theta_form_jacobi_by_citation,
+)
+from jacopy.packages.generalized.frame_evaluation import (
+    prove_boxtimes_components_are_413,
+)
 from jacopy.packages.generalized.general_twist import (
     PsiInvSec,
     PsiSec,
@@ -228,6 +235,9 @@ __all__ = [
     "prove_r22_reduces_to_lifted_cross_term",
     "prove_r25_is_lie_tilde_equivariance_defect",
     "prove_rotated_is_exceptional_double_plus_r",
+    "prove_koszul_dialects_agree",
+    "prove_theta_form_jacobi_by_citation",
+    "prove_boxtimes_components_are_413",
     "prove_right_leibniz_from_r_invariance",
     "prove_roytenberg_h_is_twisted_dorfman",
     "prove_roytenberg_is_theta_double_under_poisson",

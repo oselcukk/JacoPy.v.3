@@ -305,11 +305,16 @@ class FISharpPairingSwapDefinition(Definition):
 
 
 class NambuSharpPairingEvalDefinition(Definition):
-    """p = 1 evaluation view: ``⟨β, Πα⟩ → Π(α, β)`` (an alternating
-    two-slot evaluation of the bivector) — definitional, the Pairing
-    face of the sharp's contraction. Lets the canonical alternating
-    sort merge ``⟨η,Πω⟩`` with ``−⟨ω,Πη⟩`` (the p = 1 g_Z
-    degeneration)."""
+    """Evaluation view of the sharp: ``⟨β, Πω⟩ → Π(α₁,…,α_p, β)``
+    when ``ω = α₁∧…∧α_p`` decomposes into 1-forms (a single 1-form
+    at p = 1) — definitional, the Pairing face of the sharp's
+    contraction (the action face is
+    :class:`~jacopy.packages.poisson.nambu.NambuSharpActionDefinition`).
+    At p = 1 it lets the canonical alternating sort merge ``⟨η,Πω⟩``
+    with ``−⟨ω,Πη⟩`` (the g_Z degeneration); at p ≥ 2 on a
+    decomposable coframe wedge it produces the multivector's frame
+    components (the (4.13) ↔ ⊛ bridge, 2026-09-10). Opaque p-forms
+    stay inert (honest)."""
 
     anchor = None  # Pairing (set in __init__)
 
@@ -320,17 +325,38 @@ class NambuSharpPairingEvalDefinition(Definition):
         self._registry = registry
         self.anchor = Pairing
         self.name = (
-            "Nambu sharp pairing evaluation: ⟨β, Πα⟩ = Π(α, β)"
+            "Nambu sharp pairing evaluation: ⟨β, Πω⟩ = Π(α₁,…,α_p, β) "
+            "on decomposable ω"
         )
+
+    def _legs(self, omega: Expr):
+        from jacopy.algebra.derivation import degree_of
+        from jacopy.core.symbolic_degree import Degree
+        from jacopy.core.wedge import Wedge
+
+        p = self._N.p
+        if p == 1:
+            return [omega]
+        if not (
+            isinstance(omega, Wedge) and len(omega.children) == p
+        ):
+            return None
+        for leg in omega.children:
+            try:
+                if degree_of(leg, self._registry) != Degree.const(1):
+                    return None
+            except ValueError:
+                return None
+        return list(omega.children)
 
     def matches(self, expr: Expr) -> bool:
         from jacopy.core.pairing import Pairing
 
         return (
             isinstance(expr, Pairing)
-            and self._N.p == 1
             and isinstance(expr.X, NambuSharpVF)
             and expr.X.pi == self._N.pi
+            and self._legs(expr.X.omega) is not None
         )
 
     def rewrite(self, expr: Expr) -> Expr:
@@ -338,7 +364,7 @@ class NambuSharpPairingEvalDefinition(Definition):
 
         return MultiEval(
             self._N.pi,
-            expr.X.omega,
+            *self._legs(expr.X.omega),
             expr.alpha,
             alternating=True,
             slot_kind="covector",

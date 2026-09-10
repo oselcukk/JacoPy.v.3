@@ -734,3 +734,57 @@ class TrivialZeroSumDefinition(Definition):
 
     def rewrite(self, expr: Expr) -> Expr:
         return Integer(0)
+
+
+# ------------------------------------------------------------------- #
+# Dialect bridge: the order-1 Nambu sharp IS the Poisson sharp         #
+# ------------------------------------------------------------------- #
+
+
+def poisson_view(structure: NambuPoissonStructure):
+    """The order-1 Nambu structure read as a
+    :class:`~jacopy.packages.poisson.core.PoissonStructure` on the
+    SAME bivector (so Poisson-package theorems — the general Koszul
+    Jacobi of 5.E.2b, the tilde calculus — can be cited against
+    Nambu-dialect expressions through
+    :class:`NambuToPoissonSharpDefinition`)."""
+    from jacopy.packages.poisson.core import PoissonStructure
+
+    if structure.p != 1:
+        raise ValueError(
+            "only an order-1 Nambu structure (a bivector) has a "
+            "Poisson view"
+        )
+    return PoissonStructure(structure.pi)
+
+
+class NambuToPoissonSharpDefinition(Definition):
+    """THE DIALECT BRIDGE (2026-09-10): at p = 1 the Nambu sharp node
+    ``Π(ω)`` and the Poisson sharp node ``π♯(ω)`` denote the same
+    vector field ``θ♯ω`` (both act as ``f ↦ −θ(df, ω) = θ(ω, df)``);
+    the two packages grew separate node families (Nambu:
+    ``NambuSharpVF`` + the ``ℒ_{Πω}η − ι_{Πη}dω`` Koszul formula;
+    Poisson: ``SharpVF`` + the ``KoszulBracket`` atom). This rule
+    rewrites the Nambu node into the Poisson node, so Poisson-dialect
+    theorems can be cited on Nambu-dialect expressions:
+
+        Π(ω) → π♯(ω)      (same bivector, p = 1 only)."""
+
+    anchor = NambuSharpVF
+
+    def __init__(self, structure: NambuPoissonStructure) -> None:
+        if structure.p != 1:
+            raise ValueError("the dialect bridge is a p = 1 statement")
+        self._N = structure
+        self.name = (
+            f"dialect bridge ({structure.pi._repr_inner()}): "
+            "Nambu sharp Π(ω) → Poisson sharp π♯(ω)"
+        )
+
+    def matches(self, expr: Expr) -> bool:
+        return isinstance(expr, NambuSharpVF) and expr.pi == self._N.pi
+
+    def rewrite(self, expr: Expr) -> Expr:
+        from jacopy.packages.poisson.core import SharpVF
+
+        return SharpVF(expr.pi, expr.omega)

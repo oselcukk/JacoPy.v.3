@@ -287,3 +287,126 @@ def prove_anchor_components(
         notes="ρ(0 ⊕ e^b) = θ♯e^b on the basis (Watamura (2.6))",
         label="anchor components normalize to 0",
     )
+
+
+def prove_boxtimes_components_are_413(
+    N3,
+    fr: Frame,
+    indices,
+    c_up,
+    *,
+    registry: Optional[PropertyRegistry] = None,
+) -> Tuple[ProofChain, Theorem]:
+    """The (4.13) ↔ ⊛ COMPONENT IDENTITY (the last open item of
+    ``examples/bracket_twist_research_interface``, 2026-09-10):
+
+        ⟨e^c, (Π₃⊛Π₃)(e^{a₁}∧…∧e^{a₅})⟩ = 5 Π^{[a₁a₂a₃} Π^{a₄a₅]c}
+
+    — the (4.14) bundle map ``⊛ω₅ = ½Π₃(ι_{Π₃}ω₅)`` evaluated on a
+    basis 5-form has exactly the paper's antisymmetrised frame
+    components. Left side: ``ι_{Π₃}`` on the decomposable coframe
+    wedge (:class:`~jacopy.central.objects.multivector_interior.MultivectorInteriorDecomposableFormDefinition`),
+    then the sharp's pairing face; right side: the antisymmetriser
+    of :mod:`jacopy.research.antisymmetrize` (120 signed terms) —
+    both canonicalise to the same 10-term ½-weighted sum (the 3!·2!
+    = 12 repeats of each split ``(I, Iᶜ)`` against the 1/5!).
+    ``indices`` are the five upper index names, ``c_up`` the free
+    one."""
+    from jacopy.core.expr import Product
+    from jacopy.core.wedge import Wedge
+    from jacopy.algorithms.simplify import simplify
+    from jacopy.central.objects.multivector_interior import (
+        MultivectorInteriorDecomposableFormDefinition,
+        MultivectorInteriorLinearityDefinition,
+    )
+    from jacopy.packages.drinfeld.examples import boxtimes
+    from jacopy.packages.drinfeld.tilde_calculus import (
+        NambuSharpPairingEvalDefinition,
+    )
+    from jacopy.packages.drinfeld.tilde_calculus import _tilde_engine
+    from jacopy.research.antisymmetrize import antisymmetrize
+
+    if N3.p != 2:
+        raise ValueError("(4.13) is a statement about a trivector")
+    idx = tuple(str(i) for i in indices)
+    if len(idx) != 5:
+        raise ValueError("five bracketed indices are needed")
+    co = fr.dual()
+    basis5 = Wedge(*(co.field(i) for i in idx))
+    lhs = Pairing(co.field(c_up), boxtimes(N3, basis5))
+
+    def comp(*names):
+        return MultiEval(
+            N3.pi,
+            *(co.field(n) for n in names),
+            alternating=True,
+            slot_kind="covector",
+        )
+
+    rhs = Product(
+        Integer(5),
+        antisymmetrize(
+            Product(comp(*idx[:3]), comp(*idx[3:], c_up)), idx
+        ),
+    )
+    engine = _tilde_engine(N3, registry, declare_fi=False)
+    engine.register(MultivectorInteriorLinearityDefinition(registry))
+    engine.register(
+        MultivectorInteriorDecomposableFormDefinition(registry)
+    )
+    engine.register(NambuSharpPairingEvalDefinition(N3, registry))
+    from jacopy.packages.poisson.tilde import _normalized_by
+
+    left = _normalized_by(engine, lhs, registry)
+    right = simplify(rhs, registry)
+    diff = simplify(Sum(left, Neg(right)), registry)
+    if diff != Integer(0):
+        raise ProofFailure(
+            "boxtimes_components_are_413: ⟨e^c, ⊛(e^{a₁…a₅})⟩ − "
+            "5Π^{[a₁a₂a₃}Π^{a₄a₅]c} FAILS — residual "
+            + diff._repr_inner()[:160]
+        )
+    chain = ProofChain(
+        [
+            ProofStep(
+                lhs,
+                left,
+                rule="⊛ on the basis 5-form: ι_{Π₃} on the coframe "
+                "wedge + sharp pairing evaluation",
+                justification="engine normal form",
+            ),
+            ProofStep(
+                rhs,
+                right,
+                rule="5Π^{[a₁a₂a₃}Π^{a₄a₅]c}: antisymmetriser "
+                "canonicalised (120 signed terms → ½-weighted splits)",
+                justification="simplify (alternating canonical form)",
+            ),
+            ProofStep(
+                Sum(left, Neg(right)),
+                Integer(0),
+                rule="the two canonical forms coincide",
+                justification="simplify",
+            ),
+        ]
+    )
+    theorem = Theorem(
+        name="boxtimes_components_are_413",
+        statement="⟨e^c, (Π₃⊛Π₃)(e^{a₁}∧…∧e^{a₅})⟩ = "
+        "5Π^{[a₁a₂a₃}Π^{a₄a₅]c} — the (4.14) bundle map ⊛ = ½Π₃∘ι_{Π₃} "
+        "has the paper's (4.13) frame components",
+        lhs=Sum(lhs, Neg(rhs)),
+        rhs=Integer(0),
+        proof=chain,
+        generality="instance",
+        from_axioms=(
+            "⊛ definition (4.14)",
+            "multivector interior on a decomposable form "
+            "(component face, sign fixed by the decomposable-"
+            "multivector rule)",
+            "sharp pairing evaluation on decomposable forms",
+            "antisymmetriser definition",
+        ),
+        notes="E6 paper (4.13)/(4.14) agree with the ½ normalisation",
+    )
+    return chain, theorem
