@@ -157,6 +157,12 @@ def degree_of(
             return _deg
     if isinstance(expr, (Integer, Rational)):
         return Degree.const(0)
+    # Partial evaluation of an alternating form (PDF 8w generalization):
+    # the node computes its own degree from the head and the number of
+    # fixed slots; it is not an Atom, so it is consulted explicitly.
+    _pe_deg = getattr(expr, "degree", None) if type(expr).__name__ == "PartialEval" else None
+    if isinstance(_pe_deg, Degree):
+        return _pe_deg
     if isinstance(expr, Product):
         total = Degree.const(0)
         for c in expr.children:

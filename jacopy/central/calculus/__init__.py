@@ -29,6 +29,12 @@ from jacopy.central.calculus.interior_rules import (
     InteriorEvalDefinition,
     InteriorVectorLinearityDefinition,
 )
+from jacopy.central.calculus.partial_eval_rules import (
+    AlternatingPartialEvalAsInteriorDefinition,
+    MusicalAsPartialEvalDefinition,
+    PartialEvalCollapseDefinition,
+    PartialEvalLinearityDefinition,
+)
 from jacopy.central.calculus.scalars import is_scalar_function
 
 __all__ = [
@@ -50,5 +56,9 @@ __all__ = [
     "InteriorActDefinition",
     "InteriorEvalDefinition",
     "InteriorVectorLinearityDefinition",
+    "AlternatingPartialEvalAsInteriorDefinition",
+    "MusicalAsPartialEvalDefinition",
+    "PartialEvalCollapseDefinition",
+    "PartialEvalLinearityDefinition",
     "is_scalar_function",
 ]

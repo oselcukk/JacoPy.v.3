@@ -341,6 +341,7 @@ def _load_core_handlers() -> None:
     from jacopy.core.indexed_sum import IndexedSum
     from jacopy.core.multi_eval import MultiEval
     from jacopy.core.pairing import Pairing
+    from jacopy.central.objects.partial_eval import PartialEval
     from jacopy.core.symmetrize import Antisymmetrization, Symmetrization
     from jacopy.core.tensor_product import TensorProduct
     from jacopy.core.wedge import Wedge
@@ -378,6 +379,15 @@ def _load_core_handlers() -> None:
         sub = f"{dummy} \\in {latex_name(rng)}" if rng else dummy
         body = to_latex(expr.body, _P_SUM + 1)
         return _wrap(f"\\sum_{{{sub}}} {body}", _P_SUM, ctx)
+
+    @_register(PartialEval)
+    def _partial(expr, ctx):
+        fixed = dict(expr.fixed)
+        slots = ",\\, ".join(
+            to_latex(fixed[i], 0) if i in fixed else "\\cdot" for i in range(expr.arity)
+        )
+        head = to_latex(expr.head, _P_CALL + 1)
+        return _wrap(f"{head}\\!\\left({slots}\\right)", _P_CALL, ctx)
 
     @_register(Pairing)
     def _pairing(expr, _ctx):

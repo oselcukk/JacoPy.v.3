@@ -27,6 +27,12 @@ from jacopy.central.calculus import (
     SlotZeroDefinition,
 )
 from jacopy.central.calculus.symmetrize_rules import SymAltEvalDefinition
+from jacopy.central.calculus.partial_eval_rules import (
+    AlternatingPartialEvalAsInteriorDefinition,
+    MusicalAsPartialEvalDefinition,
+    PartialEvalCollapseDefinition,
+    PartialEvalLinearityDefinition,
+)
 from jacopy.central.tangent.lie_bracket import (
     LieBracketActionDefinition,
     ScalarActAsMultiplicationDefinition,
@@ -97,6 +103,12 @@ def tangent_engine(
             # (q,r)-tensor Lie evaluation law (PDF 9e; 2026-09-08
             # audit compliance-2 closure).
             _TensorLieEval(registry),
+            # item 8w generalization (ledger K2): partial evaluation
+            # of k-linear maps and the musical atoms as its j = 1 case.
+            PartialEvalCollapseDefinition(),
+            PartialEvalLinearityDefinition(registry),
+            AlternatingPartialEvalAsInteriorDefinition(),
+            MusicalAsPartialEvalDefinition(),
         ],
         mode=mode,
     )

@@ -27,9 +27,13 @@ Leibniz rule applies over products. They are therefore modelled as
 on the instance and recognized by ``degree_of``.
 
 The "generalization to arbitrary numbers" of item 8w (musical views of
-p-linear maps, ``(E)^k → C^∞`` ↔ ``E^{k-j} → (E^*)^j``) is **deferred**
-and tracked in the ROADMAP (Phase 2/4 entry); this module covers the
-bilinear case.
+k-linear maps with any number of slots fixed, ``(E)^k → C^∞`` ↔
+``E^{k-j} → (E^*)^{⊗j}``) lives in
+:mod:`jacopy.central.objects.partial_eval` (:class:`PartialEval`,
+:func:`musical_view`, :func:`partial_eval`; ledger K2, 2026-09-22);
+the engine identifies ``g^♭(X)`` with ``g(X, ·)`` and ``π^♯(α)`` with
+``π(α, ·)`` (:class:`~jacopy.central.calculus.partial_eval_rules.MusicalAsPartialEvalDefinition`).
+This module keeps the bilinear atoms.
 """
 
 from __future__ import annotations

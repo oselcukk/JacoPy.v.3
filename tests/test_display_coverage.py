@@ -79,6 +79,7 @@ def _recipes():
     from jacopy.central.objects.metric import InverseMetric, Metric
     from jacopy.central.objects.multivector_interior import MultivectorInterior
     from jacopy.central.objects.musical import Flat, Sharp
+    from jacopy.central.objects.partial_eval import musical_view
     from jacopy.central.objects.tensor import Tensor
     from jacopy.central.objects.tilde_interior import TildeInterior
     from jacopy.central.tangent.anholonomy import anholonomy_coefficient
@@ -150,6 +151,7 @@ def _recipes():
         "TensorProduct": TensorProduct(om, et), "HodgeStar": HodgeStar(om, 3),
         "IndexedSum": IndexedSum(Symbol("i"), (0, 1), X),
         "MultiEval": MultiEval(a2, X, Y), "Pairing": Pairing(om, X),
+        "PartialEval": musical_view(Metric("g"), X),
         "Symmetrization": Symmetrization(TensorProduct(om, et)),
         "Antisymmetrization": Antisymmetrization(TensorProduct(om, et)),
         "Wildcard": Wildcard("w"), "SeqWildcard": SeqWildcard("ws"),

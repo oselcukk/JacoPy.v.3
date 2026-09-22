@@ -51,6 +51,11 @@ from jacopy.central.objects.musical import (
     flat,
     sharp,
 )
+from jacopy.central.objects.partial_eval import (
+    PartialEval,
+    musical_view,
+    partial_eval,
+)
 from jacopy.central.objects.metric import (
     Metric,
     InverseMetric,
@@ -120,6 +125,10 @@ __all__ = [
     "Sharp",
     "flat",
     "sharp",
+    # item 8w generalization: partial evaluation of k-linear maps
+    "PartialEval",
+    "musical_view",
+    "partial_eval",
     # multivectors
     "PVector",
     "p_vectors",

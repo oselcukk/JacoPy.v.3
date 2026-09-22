@@ -222,6 +222,20 @@ def signature_of(expr: Expr) -> Optional[Tuple[int, int]]:
         return None if p is None else (p, 0)
     if isinstance(expr, Neg):
         return signature_of(expr.arg)
+    # Partial evaluation (item 8w): the open slots keep their kind —
+    # vector slots are covariant, covector slots contravariant; a
+    # ``(q, r)`` tensor head lists its q covector slots first.
+    from jacopy.central.objects.partial_eval import PartialEval
+    if isinstance(expr, PartialEval):
+        head_sig = signature_of(expr.head)
+        if expr.slot_kind == "vector":
+            return (0, expr.n_open)
+        if expr.slot_kind == "covector":
+            return (expr.n_open, 0)
+        if head_sig is None or head_sig[0] + head_sig[1] != expr.arity:
+            return None
+        q_open = sum(1 for i in expr.open_positions if i < head_sig[0])
+        return (q_open, expr.n_open - q_open)
     from jacopy.core.symmetrize import Antisymmetrization, Symmetrization
     if isinstance(expr, (Symmetrization, Antisymmetrization)):
         return signature_of(expr.arg)
