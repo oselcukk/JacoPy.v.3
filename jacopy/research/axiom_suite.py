@@ -331,9 +331,25 @@ class AxiomSuite:
                     "contains is not a faithful test; pass an "
                     "independent probe"
                 )
+            if self._scalar_degree(self.probe) != 0:
+                # a symbol declared as a p-form generator (or not
+                # declared at all) is not a C∞ function: a vector
+                # field acting on it is not the probe of a vector
+                # identity (2026-09-22 audit)
+                raise ValueError(
+                    f"the probe {self.probe._repr_inner()!r} is not a "
+                    "declared degree-0 scalar function on this registry"
+                )
             return self.probe
         name, suffix = "ħ", ""
-        while f"{name}{suffix}" in avoid:
+        # skip names in the expression AND names the registry already
+        # grades as something other than a scalar function (a user's
+        # 2-form generator called ħ must be neither reused nor
+        # re-declared — 2026-09-22 audit)
+        while (
+            f"{name}{suffix}" in avoid
+            or self._scalar_degree(Symbol(f"{name}{suffix}")) not in (0, None)
+        ):
             suffix += "′"
         full = f"{name}{suffix}"
         # one declaration per name and REGISTRY: a symbol already
@@ -344,11 +360,26 @@ class AxiomSuite:
             cache = self._probe_cache = {}
         if full not in cache:
             sym = Symbol(full)
-            if self.registry is not None and self.registry.has(sym, Graded):
+            if self._scalar_degree(sym) == 0:
                 cache[full] = sym
             else:
                 (cache[full],) = functions(full, registry=self.registry)
         return cache[full]
+
+    def _scalar_degree(self, sym) -> Optional[int]:
+        """The registry's declared degree of ``sym`` as an int, or
+        ``None`` when undeclared / symbolic."""
+        from jacopy.core.properties import Graded
+
+        if self.registry is None:
+            return None
+        prop = self.registry.get(sym, Graded)
+        if prop is None:
+            return None
+        try:
+            return prop.degree.as_int()
+        except ValueError:
+            return None
 
     @property
     def last_report(self) -> List[str]:

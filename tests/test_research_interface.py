@@ -515,3 +515,52 @@ def test_metric_invariance_rejects_an_ill_typed_r_action(arity):
     e = T.section(X, a)
     with pytest.raises(ValueError, match="component"):
         AxiomSuite(data).metric_invariance(e, e, e)
+
+
+# ---- 2026-09-22 audit (F6B6791_FIX_RECHECK) pins ------------------- #
+
+
+def test_wedge_degree_recurses_into_nested_wedges_and_indexed_sums():
+    # Nested wedge V∧((X+Y)∧Z) and an indexed vector sum Σ_i X are
+    # graded by EXTERIOR degree (2, resp. 1); earlier both fell
+    # through to degree_of and were sorted with the even sign.
+    from jacopy.core.expr import Symbol
+    from jacopy.core.indexed_sum import IndexedSum
+    from jacopy.core.wedge import Wedge
+    from jacopy.proof import show_equal
+    from jacopy.proof.expansion import ExpansionEngine
+    from jacopy.proof.strategies import ProofFailure
+    from jacopy.research.engine_assembly import (
+        WedgeGradedOrderDefinition,
+        _wedge_degree,
+    )
+
+    reg = PropertyRegistry()
+    X, Y, Z, V = vector_fields("Xn Yn Zn Vn")
+    A = Wedge(Sum(X, Y), Z)
+    S = IndexedSum(Symbol("i"), (0, 1), X)
+    assert _wedge_degree(A, reg) == 2
+    assert _wedge_degree(S, reg) == 1
+    eng = ExpansionEngine()
+    eng.register(WedgeGradedOrderDefinition(reg))
+    with pytest.raises(ProofFailure):
+        show_equal(Wedge(V, A), Neg(Wedge(A, V)), registry=reg, engine=eng)
+    with pytest.raises(ProofFailure):
+        show_equal(Wedge(Y, S), Wedge(S, Y), registry=reg, engine=eng)
+
+
+def test_probe_must_be_a_declared_scalar_and_default_avoids_form_names():
+    from jacopy.core.properties import Graded
+
+    reg = PropertyRegistry()
+    data, e, _ = _annihilator_candidate(reg)
+    (p2,) = functions("p2", registry=reg, degree=2)
+    with pytest.raises(ValueError, match="scalar"):
+        AxiomSuite(data, registry=reg, probe=p2).symmetric_part(e, e)
+    (reserved,) = functions("ħ", registry=reg, degree=2)
+    suite = AxiomSuite(data, registry=reg)
+    suite.symmetric_part(e, e)
+    probe = suite._fresh_probe(set())
+    assert reg.get(reserved, Graded).degree.as_int() == 2
+    assert reg.get(probe, Graded).degree.as_int() == 0
+    assert probe != reserved
