@@ -314,3 +314,42 @@ def test_theorem_document_compiles_with_pdflatex(magic_chain):
         )
         assert run.returncode == 0, run.stdout[-2000:]
         assert (Path(tmp) / "thm.pdf").exists()
+
+
+def _pdflatex(doc: str) -> subprocess.CompletedProcess:
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "doc.tex"
+        src.write_text(doc, encoding="utf-8")
+        run = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", src.name],
+            cwd=tmp, capture_output=True, text=True, timeout=180,
+        )
+        run.pdf_exists = (Path(tmp) / "doc.pdf").exists()  # type: ignore[attr-defined]
+        return run
+
+
+@pytest.mark.skipif(shutil.which("pdflatex") is None, reason="pdflatex not installed")
+def test_long_glyph_heavy_theorem_compiles_with_pdflatex():
+    # K1.b: the exceptional-double theorem (long statement with ′, ₂₅,
+    # ℒ̃, Π̂, ⊛, Λ⁵ → TM) plus its full transcript — every glyph path of
+    # the text-mode escaper in one document.
+    from jacopy.packages.generalized.exceptional_double import (
+        prove_r25_is_lie_tilde_equivariance_defect,
+    )
+    from jacopy.packages.poisson.nambu import nambu_structure
+
+    reg = PropertyRegistry()
+    (h,) = functions("h", registry=reg)
+    (om2,) = forms("ω₂", degree=2)
+    (et5,) = forms("η₅", degree=5)
+    N3, N6 = nambu_structure("Π₃", p=2), nambu_structure("Π₆", p=5)
+    chain, thm = prove_r25_is_lie_tilde_equivariance_defect(N3, N6, om2, et5, h, registry=reg)
+    run = _pdflatex(theorem_to_latex_document(thm, author="jacopy"))
+    assert run.returncode == 0 and run.pdf_exists, run.stdout[-2000:]
+
+
+@pytest.mark.skipif(shutil.which("pdflatex") is None, reason="pdflatex not installed")
+def test_tikz_chain_document_compiles_with_pdflatex(magic_chain):
+    # K1.c: the TikZ diagram is compiled, not just line-counted.
+    run = _pdflatex(chain_to_tikz_document(magic_chain, title="Cartan magic (TikZ)"))
+    assert run.returncode == 0 and run.pdf_exists, run.stdout[-2000:]

@@ -26,6 +26,7 @@ from jacopy.core.expr import Expr
 from jacopy.display.ascii import VERBOSITY_MODES
 from jacopy.display.latex import (
     chain_to_latex,
+    section_to_latex,
     step_to_latex,
     theorem_to_latex,
     to_latex,
@@ -100,11 +101,16 @@ class LatexDisplay:
         return hash((self._latex, self._environment))
 
 
-def display_expr(expr: Expr) -> LatexDisplay:
-    """Wrap an :class:`Expr` as inline Jupyter math."""
-    if not isinstance(expr, Expr):
-        raise TypeError("display_expr: expected an Expr")
-    return LatexDisplay(to_latex(expr))
+def display_expr(expr) -> LatexDisplay:
+    """Wrap an :class:`Expr` (or a research-layer
+    ``GeneralizedSection``) as inline Jupyter math."""
+    if isinstance(expr, Expr):
+        return LatexDisplay(to_latex(expr))
+    from jacopy.research.sections import GeneralizedSection
+
+    if isinstance(expr, GeneralizedSection):
+        return LatexDisplay(section_to_latex(expr))
+    raise TypeError("display_expr: expected an Expr or a GeneralizedSection")
 
 
 def display_step(step: ProofStep) -> LatexDisplay:

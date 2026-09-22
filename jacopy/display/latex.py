@@ -64,6 +64,8 @@ _UNICODE_TO_LATEX: Dict[str, str] = {
     # script / blackboard letters used as operator names
     "ℒ": r"\mathcal{L}", "𝒦": r"\mathcal{K}", "𝒟": r"\mathcal{D}",
     "𝒫": r"\mathcal{P}", "ℝ": r"\mathbb{R}", "ħ": r"\hbar",
+    "𝔻": r"\mathbb{D}", "𝕃": r"\mathbb{L}", "𝔛": r"\mathfrak{X}",
+    "𝔤": r"\mathfrak{g}", "ℓ": r"\ell",
     # musical / algebraic
     "♭": r"\flat", "♯": r"\sharp",
     "∧": r"\wedge", "∨": r"\vee", "⋆": r"\star", "⊛": r"\circledast",
@@ -221,13 +223,48 @@ def to_latex(expr: Expr, ctx_precedence: int = 0) -> str:
         h = _HANDLERS.get(cls)
         if h is not None:
             return h(expr, ctx_precedence)
-    return latex_name(expr._repr_inner())
+    return _name_with_slots(expr)
+
+
+def _name_with_slots(expr: Expr) -> str:
+    """Fallback for name-carrying nodes: the display name with every
+    rewritable slot's own repr replaced by that slot's LaTeX (so
+    ``L^R_U(r)`` renders its ``U`` and ``r`` structurally, and a slot
+    landing in a sub/superscript is braced)."""
+    name = getattr(expr, "name", None) or expr._repr_inner()
+    slots = tuple(getattr(expr, "rewritable_slots", ()) or ())
+    tokens = []
+    for i, slot in enumerate(slots):
+        inner = slot._repr_inner()
+        if inner and inner in name:
+            token = f"\x00{i}\x00"
+            name = name.replace(inner, token, 1)
+            tokens.append((token, slot))
+    out = latex_name(name)
+    for token, slot in tokens:
+        pos = out.find(token)
+        rendered = to_latex(slot, 0)
+        if pos > 0 and out[pos - 1] in "_^":
+            rendered = "{" + rendered + "}"
+        out = out.replace(token, rendered, 1)
+    return out
 
 
 def _wrap(text: str, own_prec: int, ctx_prec: int) -> str:
     if own_prec < ctx_prec:
         return f"\\left({text}\\right)"
     return text
+
+
+def section_to_latex(section) -> str:
+    """A :class:`~jacopy.research.sections.GeneralizedSection`
+    ``U ⊕ ω₂ ⊕ ω₅`` as one ``\\oplus``-joined snippet (each component
+    rendered through :func:`to_latex`)."""
+    from jacopy.research.sections import GeneralizedSection
+
+    if not isinstance(section, GeneralizedSection):
+        raise TypeError("section_to_latex: expected a GeneralizedSection")
+    return " \\oplus ".join(to_latex(c, _P_SUM + 1) for c in section.components)
 
 
 def _call(head: str, *args: Expr) -> str:
@@ -361,7 +398,7 @@ def _load_core_handlers() -> None:
 
     @_register(Derivation)
     def _deriv(expr, _ctx):
-        return latex_name(expr.name)
+        return _name_with_slots(expr)
 
     @_register(Act)
     def _act(expr, ctx):
