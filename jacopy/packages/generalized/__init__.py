@@ -126,6 +126,11 @@ from jacopy.packages.generalized.exceptional_double import (
     prove_r25_is_lie_tilde_equivariance_defect,
     prove_rotated_is_exceptional_double_plus_r,
 )
+from jacopy.packages.generalized.exact_locality_projector import (
+    b_field_projector,
+    prove_b_field_projector_is_a_locality_projector,
+    prove_projector_fixes_locally_exact_forms,
+)
 from jacopy.packages.generalized.dialect_bridge import (
     prove_koszul_dialects_agree,
     prove_theta_form_jacobi_by_citation,
@@ -236,6 +241,9 @@ __all__ = [
     "prove_r25_is_lie_tilde_equivariance_defect",
     "prove_rotated_is_exceptional_double_plus_r",
     "prove_koszul_dialects_agree",
+    "b_field_projector",
+    "prove_b_field_projector_is_a_locality_projector",
+    "prove_projector_fixes_locally_exact_forms",
     "prove_theta_form_jacobi_by_citation",
     "prove_boxtimes_components_are_413",
     "prove_right_leibniz_from_r_invariance",

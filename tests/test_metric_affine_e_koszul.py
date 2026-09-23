@@ -3,6 +3,7 @@
 
 import pytest
 
+from jacopy.core.expr import Integer
 from jacopy.core.registry import PropertyRegistry
 from jacopy.proof.strategies import ExpandAndSimplify, ProofFailure
 from jacopy.central.objects import Bundle
@@ -165,3 +166,41 @@ class TestKoszulReferenceDecomposition:
         assert prove_koszul_reference_decomposition(
             E, nabla, nbar, fr, u, v, w, registry=reg
         ).steps
+
+
+class TestFundamentalTheoremComponents:
+    """[MC Thm 3.2, eq (3.44)] — ledger K3.a (2026-09-23)."""
+
+    def test_lowered_344_closes(self, setup):
+        from jacopy.packages.metric_affine.e_connection import e_connection
+        from jacopy.packages.metric_affine.e_koszul import (
+            prove_fundamental_theorem_components,
+        )
+
+        reg, E, u, v, w, nabla, fr = setup
+        kconn = e_connection(E, "K∇")
+        chain = prove_fundamental_theorem_components(
+            E, nabla, kconn, fr, registry=reg
+        )
+        assert len(chain.steps) == 2
+        assert all(s.children for s in chain.steps)
+        assert "(3.44)" in chain.steps[0].rule
+
+    def test_honest_without_null_locality(self, setup):
+        # with a general locality operator the K-corrections do not
+        # vanish and the L = 0 decomposition is false
+        from jacopy.core.expr import Sum, Neg
+        from jacopy.packages.metric_affine.e_connection import e_connection
+        from jacopy.packages.metric_affine.e_koszul import (
+            EKoszulDeclaration,
+            fundamental_theorem_components,
+        )
+        from jacopy.packages.metric_affine.modified import _engine
+        from jacopy.packages.poisson.tilde import _normalized_by
+
+        reg, E, u, v, w, nabla, fr = setup
+        kconn = e_connection(E, "K∇")
+        lhs, rhs = fundamental_theorem_components(E, nabla, kconn, fr, "b", "c", "d")
+        eng = _engine(E, fr, reg)
+        eng.register(EKoszulDeclaration(E, kconn, fr))
+        assert _normalized_by(eng, Sum(lhs, Neg(rhs)), reg) != Integer(0)

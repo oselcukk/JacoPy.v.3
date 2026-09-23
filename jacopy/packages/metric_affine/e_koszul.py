@@ -36,7 +36,7 @@ from __future__ import annotations
 from typing import Optional
 
 from jacopy.algebra.derivation import Act
-from jacopy.core.expr import Expr, Integer, Neg, Product, Sum
+from jacopy.core.expr import Expr, Integer, Neg, Product, Rational, Sum
 from jacopy.core.registry import PropertyRegistry
 from jacopy.proof.chain import ProofChain
 from jacopy.proof.expansion import Definition
@@ -619,3 +619,123 @@ def prove_projectors_agree_on_coboundary_values(
     return ExpandAndSimplify().prove(
         lhs, Integer(0), registry=registry, engine=engine
     )
+
+
+# ------------------------------------------------------------------- #
+# MC Thm 3.2 — the component decomposition (3.44) (ledger K3.a)        #
+# ------------------------------------------------------------------- #
+
+
+def _pseudo_torsion(alg: Algebroid, conn: Connection, u: Expr, v: Expr) -> Expr:
+    """``⁰T(∇)(u,v) = ∇_u v − ∇_v u − [u,v]_E`` [MC eq (3.8)] — with a
+    null locality operator this IS the modified torsion."""
+    return Sum(conn(u, v), Neg(conn(v, u)), Neg(alg.bracket(u, v)))
+
+
+def fundamental_theorem_components(
+    alg: Algebroid,
+    conn: Connection,
+    kconn: Connection,
+    fr: Frame,
+    b,
+    c,
+    d,
+):
+    """The two sides of the lowered-index (3.44) on the E-frame
+    ``(X_a)``: with ``Γ(∇)_{dbc} := g(∇_{X_b} X_c, X_d)``,
+
+        Γ(∇)_{dbc} = Γ(K∇)_{dbc}
+                     + ½[ −Q_{bcd} − Q_{cbd} + Q_{dbc}
+                          + ⁰T_{dbc} − ⁰T_{cbd} − ⁰T_{bcd} ],
+
+    where ``Q_{abc} = Q(∇,g)(X_a; X_b, X_c)`` and ``⁰T_{abc} =
+    g(⁰T(∇)(X_b, X_c), X_a)``. Returns ``(lhs, rhs)``."""
+    Xb, Xc, Xd = fr.field(b), fr.field(c), fr.field(d)
+    g = alg.metric
+
+    def Q(a, x, y):
+        return e_nonmetricity(alg, conn, a, x, y)
+
+    def T(a, x, y):
+        return g(_pseudo_torsion(alg, conn, x, y), a)
+
+    lhs = g(conn(Xb, Xc), Xd)
+    rhs = Sum(
+        g(kconn(Xb, Xc), Xd),
+        Product(
+            Rational(1, 2),
+            Sum(
+                Neg(Q(Xb, Xc, Xd)),
+                Neg(Q(Xc, Xb, Xd)),
+                Q(Xd, Xb, Xc),
+                T(Xd, Xb, Xc),
+                Neg(T(Xc, Xb, Xd)),
+                Neg(T(Xb, Xc, Xd)),
+            ),
+        ),
+    )
+    return lhs, rhs
+
+
+def prove_fundamental_theorem_components(
+    alg: Algebroid,
+    conn: Connection,
+    kconn: Connection,
+    fr: Frame,
+    b="b",
+    c="c",
+    d="d",
+    *,
+    registry: Optional[PropertyRegistry] = None,
+) -> ProofChain:
+    """[MC Thm 3.2, component half — eq (3.44)] on a local
+    almost-Leibniz algebroid with a NULL locality operator: the
+    components of an ARBITRARY E-connection ``∇`` decompose as the
+    components of the unique E-Koszul connection ``K∇`` (declared
+    E-Koszul) plus the non-metricity and pseudo-torsion blocks of
+    ``∇`` — the lowered-index form of (3.44), obtained by pairing
+    with ``X_d`` instead of contracting with ``g^{ad}``:
+
+        g(∇_{X_b}X_c, X_d) = g(K∇_{X_b}X_c, X_d)
+            + ½[−Q_{bcd} − Q_{cbd} + Q_{dbc} + ⁰T_{dbc} − ⁰T_{cbd} − ⁰T_{bcd}].
+
+    Two engine steps: (1) the decomposition itself (the frame instance
+    of the Schouten trick — the E-generalized Koszul identity of ``∇``
+    minus the clean Koszul formula of ``K∇``, ``K = 0`` because
+    ``L = 0``); (2) the explicit E-Koszul components (3.37) at
+    ``L = 0``, ``g(K∇_{X_b}X_c, X_d) = ½[ρ(X_b)g_{cd} + ρ(X_c)g_{bd} −
+    ρ(X_d)g_{bc} + g([X_b,X_c],X_d) − g([X_b,X_d],X_c) −
+    g([X_c,X_d],X_b)]`` (the paper's ``γ`` terms are the lowered
+    E-anholonomy ``g([X_b,X_c],X_d)``).
+
+    Honest scope: the raised-index (3.44) differs by the contraction
+    with ``g^{ad}``; the inverse-metric contraction rule of
+    :mod:`jacopy.packages.metric_affine.metric` lives on the
+    ``MetricValue`` node family, not on the algebroid's ``EMetric``,
+    so the raising is not mechanized here (E4 adapter item)."""
+    lhs, rhs = fundamental_theorem_components(alg, conn, kconn, fr, b, c, d)
+    engine = _engine(alg, fr, registry)
+    engine.register(NullLocalityDefinition(alg))
+    engine.register(EKoszulDeclaration(alg, kconn, fr))
+    leg1 = ExpandAndSimplify().prove(lhs, rhs, registry=registry, engine=engine)
+    Xb, Xc, Xd = fr.field(b), fr.field(c), fr.field(d)
+    k_lhs = alg.metric(kconn(Xb, Xc), Xd)
+    k_rhs = Product(Rational(1, 2), _koszul_rhs_clean(alg, Xb, Xc, Xd))
+    leg2 = ExpandAndSimplify().prove(k_lhs, k_rhs, registry=registry, engine=engine)
+    step1 = ProofStep(
+        lhs,
+        rhs,
+        rule="(3.44), lowered index: Γ(∇)_{dbc} = Γ(K∇)_{dbc} + ½[Q-block + ⁰T-block]",
+        justification="frame instance of the Schouten trick (L = 0 ⟹ K = 0); engine normal form",
+    )
+    for s in leg1:
+        step1.add_child(s)
+    step2 = ProofStep(
+        k_lhs,
+        k_rhs,
+        rule="E-Koszul components at L = 0 (3.37): Γ(K∇)_{dbc} = ½[ρ(X)g + lowered γ terms]",
+        justification="declared E-Koszul connection; engine normal form",
+    )
+    for s in leg2:
+        step2.add_child(s)
+    return ProofChain([step1, step2])
