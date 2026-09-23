@@ -78,7 +78,9 @@ class Expr(ABC):
     # ---- traversal -------------------------------------------------- #
 
     def walk(self) -> Iterator["Expr"]:
-        """Pre-order traversal yielding ``self`` followed by descendants."""
+        """Pre-order traversal yielding ``self`` followed by descendants
+        through ``children`` only. :func:`jacopy.core.traverse.iter_nodes`
+        also descends into the ``rewritable_slots`` of operator atoms."""
         yield self
         for child in self.children:
             yield from child.walk()
@@ -139,7 +141,19 @@ class Expr(ABC):
         if self == dummy:
             return target
         if self.is_atom:
-            return self
+            # Slot protocol (Faz 8 step 2b): an operator-like atom that
+            # exposes ``rewritable_slots`` / ``with_slots`` is substituted
+            # inside its slots, so ``ι_X[X ↦ Y] = ι_Y`` without a
+            # per-class override (atoms hiding STRING indices still
+            # override, see the frame atoms).
+            slots = getattr(self, "rewritable_slots", None)
+            if not slots:
+                return self
+            slots = tuple(slots)
+            new_slots = tuple(s.substitute_atom(dummy, target) for s in slots)
+            if all(a is b for a, b in zip(new_slots, slots)):
+                return self
+            return self.with_slots(*new_slots)
         new_children = tuple(
             c.substitute_atom(dummy, target) for c in self.children
         )

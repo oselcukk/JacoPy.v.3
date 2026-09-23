@@ -57,6 +57,12 @@ from jacopy.core.multi_eval import (
     multi_eval,
     validate_arity,
 )
+from jacopy.core.traverse import (
+    contains,
+    iter_atoms,
+    iter_nodes,
+    slots_of,
+)
 from jacopy.core.indexed_sum import (
     IndexedSum,
     dummy_in,
@@ -65,6 +71,10 @@ from jacopy.core.indexed_sum import (
 from jacopy.core.wedge import Wedge
 
 __all__ = [
+    "iter_nodes",
+    "iter_atoms",
+    "contains",
+    "slots_of",
     # expr
     "Expr",
     "Atom",
