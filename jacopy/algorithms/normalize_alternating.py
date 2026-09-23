@@ -49,39 +49,28 @@ def _permutation_parity(before, after) -> int:
     return swaps % 2
 
 
-def _odd_wedge_degree(child: Expr) -> bool:
-    """True when ``child`` certainly has odd degree in the wedge
-    grading (its ``wedge_degree`` lift if present, else its own
-    ``degree`` attribute). Unknown degrees return False — the Wedge is
-    then left unsorted (soundness over completeness)."""
-    from jacopy.core.symbolic_degree import Degree
+def _odd_wedge_degree(child: Expr, registry=None) -> bool:
+    """True when ``child`` certainly has odd EXTERIOR degree — the
+    parity of the single contract
+    :func:`jacopy.algebra.grading.exterior_degree` (Faz 8 step 2a; the
+    pre-2a test read the node's own ``wedge_degree`` / ``degree``
+    attribute only, so a vector sum or an indexed sum was never
+    sorted). Unknown or symbolically undecidable parity returns False
+    — the Wedge is then left unsorted (soundness over
+    completeness)."""
+    from jacopy.algebra.grading import exterior_parity
 
-    deg = getattr(child, "wedge_degree", None)
-    if not isinstance(deg, Degree):
-        deg = getattr(child, "degree", None)
-    if not isinstance(deg, Degree):
-        return False
-    parity = deg.parity()
-    return parity == 1
+    return exterior_parity(child, registry) == 1
 
 
 def _certainly_scalar(child: Expr, registry) -> bool:
-    """True when ``child`` certainly has wedge-degree exactly 0 (a
+    """True when ``child`` certainly has exterior degree exactly 0 (a
     function): such factors turn ``∧`` into plain multiplication and
     commute freely."""
+    from jacopy.algebra.grading import exterior_degree
     from jacopy.core.symbolic_degree import Degree
 
-    deg = getattr(child, "wedge_degree", None)
-    if not isinstance(deg, Degree):
-        deg = getattr(child, "degree", None)
-    if not isinstance(deg, Degree):
-        try:
-            from jacopy.algebra.derivation import degree_of
-
-            deg = degree_of(child, registry)
-        except ValueError:
-            return False
-    return deg == Degree.const(0)
+    return exterior_degree(child, registry) == Degree.const(0)
 
 
 def _normalize_wedge(node: Expr, registry=None) -> Expr:
@@ -128,7 +117,7 @@ def _normalize_wedge(node: Expr, registry=None) -> Expr:
         or any(isinstance(c0, Neg) for c0 in node.children)
     )
 
-    if all(_odd_wedge_degree(c) for c in children):
+    if all(_odd_wedge_degree(c, registry) for c in children):
         seen = []
         for c in children:
             if any(c == s for s in seen):

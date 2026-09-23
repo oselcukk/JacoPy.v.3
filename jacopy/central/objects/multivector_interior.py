@@ -36,38 +36,36 @@ from jacopy.core.wedge import Wedge
 from jacopy.proof.expansion import Definition
 
 
-def _multivector_degree(P: Expr) -> Degree:
-    """The multivector degree of ``P`` (wedge-lift aware). In a
-    ``Product``, factors with no determinable degree are scalar
-    coefficients (degree 0) — ``f·Π₃`` grades like ``Π₃``."""
-    lift = getattr(P, "wedge_degree", None)
-    if isinstance(lift, Degree):
-        return lift
-    deg = getattr(P, "degree", None)
-    if isinstance(deg, Degree):
-        return deg
-    if isinstance(P, (Wedge, Product)):
-        total = Degree.const(0)
-        for c in P.children:
-            try:
-                total = total + _multivector_degree(c)
-            except ValueError:
-                pass  # scalar coefficient
-        return total
-    if isinstance(P, (Sum, Neg)):
-        arg = P.children[0] if isinstance(P, Sum) else P.arg
-        return _multivector_degree(arg)
-    return degree_of(P, None)
+def _multivector_degree(P: Expr, registry: Optional[PropertyRegistry] = None) -> Degree:
+    """The multivector degree of ``P`` — the single exterior-degree
+    contract :func:`jacopy.algebra.grading.exterior_degree` (Faz 8
+    step 2a), raised to a :class:`ValueError` when it is unknown.
+    ``f·Π₃`` grades like ``Π₃`` when ``f`` is a declared function of
+    ``registry``; an undeclared symbol is NOT assumed to be a scalar
+    coefficient (the pre-2a helper guessed so)."""
+    from jacopy.algebra.grading import exterior_degree, is_unknown
+
+    deg = exterior_degree(P, registry)
+    if is_unknown(deg):
+        raise ValueError(
+            f"multivector degree of {P!r} is unknown; declare its scalar "
+            "factors in a registry and pass registry=..."
+        )
+    return deg
 
 
 class MultivectorInterior(Derivation):
     """``ι_P`` — interior product by the multivector ``P``; a graded
     derivation-slot operator of degree ``−p``."""
 
-    __slots__ = ("_multivector",)
+    __slots__ = ("_multivector", "_registry")
 
     def __init__(
-        self, P: Expr, *, name: Optional[str] = None
+        self,
+        P: Expr,
+        *,
+        name: Optional[str] = None,
+        registry: Optional[PropertyRegistry] = None,
     ) -> None:
         if not isinstance(P, Expr):
             raise TypeError(
@@ -78,9 +76,12 @@ class MultivectorInterior(Derivation):
             if name is not None
             else f"ι_{P._repr_inner()}"
         )
-        k = _multivector_degree(P)
+        # ``registry`` only grades scalar coefficients of ``P`` (it is
+        # not part of the node's identity)
+        k = _multivector_degree(P, registry)
         super().__init__(display, degree=Degree.const(0) - k)
         self._multivector = P
+        self._registry = registry
 
     #: NOT a derivation: ι_P for a p-vector is a COMPOSITION of p
     #: odd derivations — Leibniz-splitting it over products is
@@ -97,7 +98,7 @@ class MultivectorInterior(Derivation):
         return (self._multivector,)
 
     def with_slots(self, P: Expr) -> "MultivectorInterior":
-        return MultivectorInterior(P)
+        return MultivectorInterior(P, registry=self._registry)
 
     def _key(self) -> Any:
         return (self._name, self._degree, self._multivector)
@@ -274,7 +275,7 @@ class MultivectorInteriorDecomposableFormDefinition(Definition):
             return None
         P = expr.op.multivector
         try:
-            p = _multivector_degree(P).as_int()
+            p = _multivector_degree(P, self._registry).as_int()
         except ValueError:
             return None
         if p is None or p < 2:

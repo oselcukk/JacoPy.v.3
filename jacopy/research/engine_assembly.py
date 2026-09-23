@@ -34,59 +34,16 @@ from jacopy.proof.expansion import Definition, ExpansionEngine
 
 def _wedge_degree(c: Expr, registry) -> Optional[int]:
     """The EXTERIOR-algebra degree of a wedge factor as a concrete
-    int, or ``None`` when it is not certain. A vector field has
-    operator degree 0 but wedge degree 1 — the ``wedge_degree`` lift
-    wins whenever a node carries one, and a derivation without a lift
-    is refused rather than graded as a scalar (2026-09-09 audit,
-    finding F1: sorting ``Y ∧ X`` as if both were even proved a false
-    equality)."""
-    from jacopy.algebra.derivation import Derivation, degree_of
-    from jacopy.core.symbolic_degree import Degree
+    int, or ``None`` when it is not certain — the concrete view of the
+    single contract :func:`jacopy.algebra.grading.exterior_degree`
+    (Faz 8 step 2a). Kept under its old name because the audit tests
+    query it; it no longer computes anything itself. History: this
+    helper used to grade on its own and the 2026-09-09/09-10/09-22
+    audits each caught it sorting an odd factor (a vector field, a
+    vector sum, a nested wedge) as even."""
+    from jacopy.algebra.grading import concrete_exterior_degree
 
-    lift = getattr(c, "wedge_degree", None)
-    if isinstance(lift, Degree):
-        try:
-            return lift.as_int()
-        except ValueError:
-            return None
-    if isinstance(c, Derivation):
-        return None
-    if isinstance(c, Product):
-        total = 0
-        for k in c.children:
-            kk = _wedge_degree(k, registry)
-            if kk is None:
-                return None
-            total += kk
-        return total
-    if isinstance(c, Neg):
-        return _wedge_degree(c.arg, registry)
-    if isinstance(c, Wedge):
-        # a nested wedge grades like the sum of its factors' EXTERIOR
-        # degrees (2026-09-22 audit: V∧((X+Y)∧Z) was graded through
-        # degree_of, i.e. as even)
-        total = 0
-        for k in c.children:
-            kk = _wedge_degree(k, registry)
-            if kk is None:
-                return None
-            total += kk
-        return total
-    if isinstance(c, IndexedSum):
-        # Σ_i body grades like its body (an indexed vector sum is odd)
-        return _wedge_degree(c.body, registry)
-    if isinstance(c, Sum):
-        # a homogeneous sum grades like its terms; a vector SUM has
-        # operator degree 0 but wedge degree 1 (2026-09-10 audit, F1:
-        # falling through to degree_of sorted Z∧(X+Y) as even)
-        degrees = {_wedge_degree(k, registry) for k in c.children}
-        if len(degrees) == 1 and None not in degrees:
-            return degrees.pop()
-        return None
-    try:
-        return degree_of(c, registry).as_int()
-    except ValueError:
-        return None
+    return concrete_exterior_degree(c, registry)
 
 
 class ZeroProductDefinition(Definition):

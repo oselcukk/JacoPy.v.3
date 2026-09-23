@@ -124,8 +124,10 @@ class TestMultivectorInterior:
         (om5,) = forms("Ωm5", degree=5)
         N3 = nambu_structure(p=2)
         rule = MultivectorInteriorLinearityDefinition(reg)
+        # ι_{fΠ}: the coefficient is graded through the registry (Faz 8
+        # 2a — an undeclared symbol is no longer guessed to be a scalar)
         node = Act(
-            MultivectorInterior(Product(f, N3.pi)), om5
+            MultivectorInterior(Product(f, N3.pi), registry=reg), om5
         )
         assert rule.matches(node)
         assert rule.rewrite(node) == Product(

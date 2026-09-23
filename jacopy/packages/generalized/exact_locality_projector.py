@@ -103,7 +103,7 @@ def _require_form(expr: Expr, degree: int, what: str, registry) -> None:
         raise TypeError(
             f"{what} must be a {degree}-form on TM; got "
             + ("an object of unknown type" if not k.known else f"a {k.kind}"
-               + (f" of degree {k.degree}" if k.degree is not None else ""))
+               + (f" of degree {k.degree}" if k.concrete_degree is not None else ""))
         )
     _on_tm(k, what)
 

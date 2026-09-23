@@ -78,9 +78,9 @@ class Slot:
             return "valid" if k.kind == "function" else "invalid"
         if k.kind != "form":
             return "invalid"
-        if k.degree is None:
-            return "unknown"
-        return "valid" if k.degree == self.degree else "invalid"
+        if k.concrete_degree is None:
+            return "unknown"  # symbolic or unknown degree: not decidable here
+        return "valid" if k.concrete_degree == self.degree else "invalid"
 
 
 def _same_bundle(a, b) -> bool:
