@@ -117,6 +117,8 @@ class EKoszulDeclaration(Definition):
     holds no ``∇``-in-metric-slot at all, and ``K``'s ``∇``'s sit
     inside ``L``-slots (inert to this rule)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     def __init__(
         self,
         alg: Algebroid,

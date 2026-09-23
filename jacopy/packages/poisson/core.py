@@ -444,6 +444,8 @@ class PoissonSNDeclaration(Definition):
     """``[π, π]_SN → 0`` — the DECLARED Poisson axiom (the structure's
     integrability), never assumed silently."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = BracketApply
 
     def __init__(self, structure: PoissonStructure) -> None:

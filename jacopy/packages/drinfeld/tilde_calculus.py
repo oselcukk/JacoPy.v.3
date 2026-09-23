@@ -78,6 +78,8 @@ class NambuMorphismDeclaration(Definition):
     honest residual. Terminating direction: a bracket of two sharps
     becomes a single sharp."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = LieBracketVF
 
     def __init__(self, structure) -> None:

@@ -223,6 +223,8 @@ class SymplecticClosedDeclaration(Definition):
     """``dω → 0`` — the DECLARED closedness of the symplectic form
     (node form and evaluated head form)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = (Act, MultiEval)
 
     def __init__(self, structure: SymplecticStructure) -> None:
@@ -258,6 +260,8 @@ class SharpFlatIdentityDeclaration(Definition):
     """``π♯(ι_X ω) → X`` — the primitive face of the DECLARED
     compatibility ``π = ω⁻¹`` (sharp ∘ flat = id)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = SharpVF
 
     def __init__(
@@ -290,6 +294,8 @@ class PoissonOmegaBridgeDeclaration(Definition):
     DECLARED compatibility ``π = ω⁻¹`` (the sign is forced by the
     first-slot interior convention: ``ω(X_g, X_f) = (ι_{X_g}ω)(X_f)
     = ⟨dg, X_f⟩ = X_f(g) = {f, g}``)."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = MultiEval
 

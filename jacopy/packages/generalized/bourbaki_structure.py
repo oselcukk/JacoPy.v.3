@@ -329,6 +329,8 @@ class BourbakiInvarianceDeclaration(Definition):
     ``ℒ^R_{ρu}(g(v, w)) → g([u,v], w) + g(v, [u,w])`` — terminating
     (the ℒ^R node disappears)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = BLieRE
 
     def __init__(self, alg: Algebroid) -> None:

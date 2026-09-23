@@ -454,6 +454,8 @@ class NambuFIDeclaration(Definition):
     the action rule turns into nested Nambu brackets — no ``L``-slot
     sharp survives, so the rewrite terminates."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = Act
 
     def __init__(

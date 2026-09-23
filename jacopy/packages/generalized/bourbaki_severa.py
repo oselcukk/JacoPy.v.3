@@ -220,6 +220,8 @@ class SymPartCollectDeclaration(Definition):
     the single-swap orientation would not terminate on generic
     slots)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     name = "(6.11) collect: [a,b] + [b,a] → 𝔻g(a,b)"
     anchor = Sum
 
@@ -280,6 +282,8 @@ class SymPartCollectDeclaration(Definition):
 class PhiIsotropyDeclaration(Definition):
     """DECLARED g-isotropy of the SPLITTING ``φ`` (Cor 9.1's extra
     hypothesis): ``g(φU, φV) → 0`` — i.e. ``F = 0``."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     name = "declared g-isotropic splitting: F(U,V) = g(φU,φV) = 0"
     anchor = BMetric

@@ -179,6 +179,8 @@ class ModifiedTorsionFreeDeclaration(Definition):
     terminates; the recombination rule collects a different shape,
     so no ping-pong."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = AlgebroidBracket
 
     def __init__(

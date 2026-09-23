@@ -71,6 +71,15 @@ class Definition(ABC):
     #: (:mod:`jacopy.proof.ownership`).
     owner = None
 
+    #: What the rule IS, logically (Faz 8 step 3a): ``"definition"`` —
+    #: a definitional unfolding or a structural law (no assumption);
+    #: ``"assumption"`` — a DECLARED axiom of a structure (the
+    #: ``*Declaration`` rules), i.e. a hypothesis the proof depends on;
+    #: ``"theorem"`` — a cited proven result. ``ProofResult.from_chain``
+    #: reads it from the fired steps; a step whose rule recorded no
+    #: role is kept as a LEGACY assumption, never dropped.
+    role = "definition"
+
     @abstractmethod
     def matches(self, expr: Expr) -> bool:
         """True when ``expr`` is an instance of this definition's LHS."""
@@ -282,6 +291,7 @@ class ExpansionEngine:
             justification=f"apply {tag}: {d.name}",
             provenance_tag=tag,
             owner=getattr(d, "owner", None),
+            role=("theorem" if tag == "theorem" else getattr(d, "role", None)),
         )
         if self._mode == "foundational" and d.is_theorem:
             builder = d.theorem_proof_builder()

@@ -362,6 +362,8 @@ class Axiom914Declaration(Definition):
     ABSTRACT algebroid bracket for INDEPENDENT A-data (PDF 13k —
     the quintet never assumed A = TM structurally)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = BLieR
 
     def __init__(self, bracket=lie_bracket) -> None:

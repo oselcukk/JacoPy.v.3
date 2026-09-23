@@ -186,6 +186,8 @@ class CourantInvarianceDeclaration(Definition):
     metric-invariance rule C1 [B 4.10].
     """
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = Act
 
     def __init__(self, alg: Algebroid) -> None:
@@ -231,6 +233,8 @@ class C3IdentityDeclaration(Definition):
     two orders are both sound readings of the same identity — their
     difference is exactly the Leibniz defect of ``D`` (Rem 2.1).
     """
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = AlgebroidBracket
 
@@ -443,6 +447,8 @@ class DNumericHomogeneityDeclaration(Definition):
     Rem 2.2 corollary therefore needs NO extra axiom. (The class
     name is kept for API stability; ``Declaration`` is historical —
     the rule cites a theorem.)"""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = CourantD
 

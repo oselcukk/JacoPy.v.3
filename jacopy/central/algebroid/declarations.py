@@ -67,6 +67,8 @@ def _scalar_split(expr: Expr, registry) -> Optional[tuple]:
 class RightLeibnizDeclaration(Definition):
     """``[u, fv]_E → ρ(u)(f)·v + f·[u, v]_E`` (declared axiom)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = AlgebroidBracket
 
     def __init__(
@@ -96,6 +98,8 @@ class RightLeibnizDeclaration(Definition):
 class LeftLeibnizDeclaration(Definition):
     """``[fu, v]_E → −ρ(v)(f)·u + f·[u, v]_E + L(Df, u, v)``
     (declared axiom; the locality term stays opaque until 3.E)."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = AlgebroidBracket
 
@@ -132,6 +136,8 @@ class AnchorMorphismDeclaration(Definition):
     "pre" property; PROVABLE from right-Leibniz + Jacobi, which is the
     Phase 3.D theorem)."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = AnchoredVF
 
     def __init__(self, alg: Algebroid) -> None:
@@ -157,6 +163,8 @@ class AnchorMorphismDeclaration(Definition):
 class JacobiDeclaration(Definition):
     """``J^E(u, v, w) → 0`` (declared Leibniz-Jacobi identity, carried
     by the Jacobiator node)."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = Jacobiator
 
@@ -186,6 +194,8 @@ class AntisymmetryDeclaration(Definition):
     correction term, so the plain orientation rewrite terminates.
     Fires on plain section slots only — linearity/Leibniz splits keep
     precedence via registration order."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = AlgebroidBracket
 
@@ -222,6 +232,8 @@ class AntisymmetryDeclaration(Definition):
 class MetricInvarianceDeclaration(Definition):
     """``ρ(u)(g(v, w)) → g([u,v], w) + g(v, [u,w])`` (declared axiom
     C1 [B 4.10] — the metric-compatibility of the bracket)."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = Act
 
@@ -272,6 +284,8 @@ class SymmetricPartDeclaration(Definition):
       with C1: C1's output puts ``[u,u]`` inside EMetric slots, never
       as a section-level summand, so the loop path cannot re-fire it.
     """
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = Sum
 

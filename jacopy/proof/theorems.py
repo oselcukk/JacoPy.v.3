@@ -212,6 +212,8 @@ class TheoremDefinition(Definition):
     #: rewrites), preventing infinite regress.
     _IN_MODULO = False
 
+    role = "theorem"
+
     def __init__(
         self,
         theorem: Theorem,

@@ -397,6 +397,8 @@ class TwistedFIDeclaration(Definition):
 
     Opt-in; reduces to :class:`NambuMorphismDeclaration` at H = 0."""
 
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
+
     anchor = None  # set in __init__ (LieBracketVF)
 
     def __init__(self, structure, H: Expr) -> None:
@@ -581,6 +583,8 @@ class PsiTwistedFIDeclaration(Definition):
         [π♯ω, π♯η]_Lie → π♯[ω,η]_π + ψ♯(ω ∧ η).
 
     Opt-in; at ψ = 0 it is the plain FI."""
+
+    role = "assumption"  # a declared axiom, not a definition (Faz 8 step 3a)
 
     anchor = None  # set in __init__
 

@@ -35,6 +35,7 @@ class ProofStep:
         "_children",
         "_provenance_tag",
         "_owner",
+        "_role",
     )
 
     #: Recognised provenance tags. ``None`` means the step carries no
@@ -59,6 +60,7 @@ class ProofStep:
         *,
         provenance_tag: Optional[str] = None,
         owner=None,
+        role: Optional[str] = None,
     ) -> None:
         if not isinstance(before, Expr):
             raise TypeError("ProofStep.before must be an Expr")
@@ -80,6 +82,9 @@ class ProofStep:
         self._provenance_tag = provenance_tag
         # the structure whose rule fired (Faz 8 step 2c; None = structure-free)
         self._owner = owner
+        # the logical role of the fired rule (Faz 8 step 3a):
+        # "definition" | "assumption" | "theorem" | None (unrecorded)
+        self._role = role
         self._children: List[ProofStep] = []
         if children:
             for ch in children:
@@ -121,6 +126,13 @@ class ProofStep:
         """The structure whose rule fired this step (``None`` when the
         rule is structure-free or the step was built by hand)."""
         return self._owner
+
+    @property
+    def role(self) -> Optional[str]:
+        """Logical role of the fired rule: ``"definition"``,
+        ``"assumption"`` (a declared axiom), ``"theorem"``, or ``None``
+        when the step recorded none (hand-built / legacy)."""
+        return self._role
 
     def add_child(self, step: "ProofStep") -> None:
         """Nest ``step`` under this one as a sub-proof."""

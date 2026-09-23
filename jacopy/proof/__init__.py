@@ -10,6 +10,15 @@ from jacopy.proof.diagnostics import (
 )
 # Register built-in rules by importing for side effects.
 from jacopy.proof import diagnostic_rules  # noqa: F401
+from jacopy.proof.result import (
+    Assumption,
+    Budget,
+    Goal,
+    ProofResult,
+    Provenance,
+    check_goal,
+    prove,
+)
 from jacopy.proof.ownership import (
     AmbiguousOwnerError,
     OwnerScope,
@@ -61,6 +70,13 @@ from jacopy.proof.verifier import (
 )
 
 __all__ = [
+    "Assumption",
+    "Budget",
+    "Goal",
+    "ProofResult",
+    "Provenance",
+    "check_goal",
+    "prove",
     "AmbiguousOwnerError",
     "OwnerScope",
     "chain_owners",
