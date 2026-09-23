@@ -1,0 +1,72 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      slow:
+        description: "also run the slow proof suites and the notebooks"
+        type: boolean
+        default: false
+  schedule:
+    # weekly: the slow proof suites and the notebook smoke run
+    - cron: "0 3 * * 1"
+
+jobs:
+  # ------------------------------------------------------------------ #
+  # Fast suite, from the INSTALLED WHEEL, on every supported Python.    #
+  # The tests run from a copy outside the repository so the source tree #
+  # can never shadow the installed package.                             #
+  # ------------------------------------------------------------------ #
+  wheel:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build the wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist
+      - name: Install the wheel (no source tree on sys.path)
+        run: |
+          python -m pip install dist/*.whl pytest
+          mkdir -p "$RUNNER_TEMP/run"
+          cp -R tests "$RUNNER_TEMP/run/tests"
+          cd "$RUNNER_TEMP/run"
+          python -c "import jacopy, os; p = os.path.dirname(jacopy.__file__); assert 'site-packages' in p, p; print('jacopy', jacopy.__version__, 'from', p)"
+      - name: Fast test suite
+        run: |
+          cd "$RUNNER_TEMP/run"
+          python -m pytest tests -q -p no:cacheprovider
+
+  # ------------------------------------------------------------------ #
+  # Slow proof suites + notebook smoke run: weekly, or on request.      #
+  # Runs from the source tree (the notebooks live in examples/).        #
+  # ------------------------------------------------------------------ #
+  slow:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (editable, with the test extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Slow proof suites
+        env:
+          JACOPY_RUN_SLOW: "1"
+        run: python -m pytest tests -q -p no:cacheprovider
+      - name: Notebook smoke run
+        run: python scripts/run_notebooks.py

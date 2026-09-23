@@ -7,11 +7,12 @@
 #   make notebooks  # smoke-execute every tutorial notebook.
 #   make clean      # remove .venv and caches.
 
-PYTHON ?= /opt/homebrew/opt/python@3.14/bin/python3.14
+# Override with e.g. `make setup PYTHON=/opt/homebrew/bin/python3.12`.
+PYTHON ?= python3
 VENV   := .venv
 VBIN   := $(VENV)/bin
 
-.PHONY: setup test notebooks clean kernel deps
+.PHONY: setup test notebooks clean kernel deps test-wheel
 
 # One-shot dev environment.
 setup: $(VENV)/.installed kernel
@@ -40,3 +41,10 @@ notebooks: $(VENV)/.installed
 
 clean:
 	rm -rf $(VENV) .pytest_cache **/__pycache__ .mypy_cache .ruff_cache
+
+# Build the wheel and run the fast suite from the INSTALLED package in a
+# throw-away venv (what CI does on every supported Python).
+test-wheel: $(VENV)/.installed
+	rm -rf build dist && $(VBIN)/python -m pip install -q build && $(VBIN)/python -m build --wheel --outdir dist
+	rm -rf .wheel-test && $(PYTHON) -m venv .wheel-test && .wheel-test/bin/pip install -q dist/*.whl pytest
+	rm -rf .wheel-test/tests && cp -R tests .wheel-test/tests && cd .wheel-test && bin/python -m pytest tests -q -p no:cacheprovider
