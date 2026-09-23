@@ -325,7 +325,7 @@ def jacobi_combination_theorem(
         generality="instance",
         from_axioms=(f"Leibniz-Jacobi ({alg.name})",),
         notes="bracket-level Jacobi via the Jacobiator carrier node",
-    )
+    ).with_structural_requires()
 
 
 def prove_d_squared_zero_on_one_forms(
@@ -373,7 +373,7 @@ def prove_d_squared_zero_on_one_forms(
             continue
         book.add(thm)
         used.append(thm)
-        cite(engine, book, thm.name)
+        cite(engine, book, thm.name, allow_legacy=True)
         # The combination may surface with the opposite overall sign;
         # register the negated instance alongside (same derivation
         # plus one sign step).
@@ -395,10 +395,10 @@ def prove_d_squared_zero_on_one_forms(
             proof=neg_chain,
             generality="instance",
             from_axioms=thm.from_axioms,
-        )
+        ).with_structural_requires()
         book.add(thm_neg)
         used.append(thm_neg)
-        cite(engine, book, thm_neg.name)
+        cite(engine, book, thm_neg.name, allow_legacy=True)
     lhs = MultiEval(
         d_E(alg, d_E(alg, alpha)),
         u,

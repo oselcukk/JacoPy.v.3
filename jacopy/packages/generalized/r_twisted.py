@@ -300,7 +300,7 @@ def _zero_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -725,7 +725,7 @@ def prove_r_twisted_jacobi_defect_is_dtheta_r(
             "tilde-contraction = evaluation (definitional)",
         ),
         notes="PDF 14f.iii / Watamura §3 — the R-flux dual of dH = 0",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -785,16 +785,23 @@ def prove_r_twisted_jacobi(
         alternating=True, slot_kind="covector",
     )
     if cite_theta_jacobi:
+        # [C'1] of the θ-double is NOT re-run here (about two minutes);
+        # it enters as an EXPLICIT ASSUMPTION of N (Faz 8 step 3b): the
+        # record is verified-with-assumptions, and every result citing it
+        # shows "[C'1] … taken as an assumption" in its requirements
         c1_vec = c1_form = None
-        assumptions = ("declared Poisson condition ([C'1] CITED)", "declared d_θR = 0")
-        cite = " (cited library theorem: prove_theta_jacobi)"
+        thm_t = None
+        assumptions = ("declared Poisson condition ([C'1] CITED)", "declared closure d_θR = 0")
+        cite = " (cited library theorem: prove_theta_jacobi — taken as an assumption here)"
+        c1_tag, c1_role = "axiom", "assumption"
     else:
-        chain_t, _ = prove_theta_jacobi(
+        chain_t, thm_t = prove_theta_jacobi(
             N, U, omega, V, eta, W, zeta, h, X, registry=registry
         )
         c1_vec, c1_form = [chain_t.steps[0]], [chain_t.steps[1]]
-        assumptions = ("declared Poisson condition ([C'1] proven)", "declared d_θR = 0")
+        assumptions = ("declared Poisson condition ([C'1] proven)", "declared closure d_θR = 0")
         cite = " (proven: prove_theta_jacobi, steps attached)"
+        c1_tag, c1_role = "theorem", "theorem"
     steps = [
         ProofStep(
             jr_vec, Sum(j0_vec, dtheta),
@@ -806,14 +813,14 @@ def prove_r_twisted_jacobi(
             dtheta, Integer(0),
             rule="declared closure d_θR = 0 (instance at (ω,η,ζ,dh))",
             justification="axiom instance of the opt-in R-flux closure",
-            provenance_tag="axiom",
+            provenance_tag="axiom", owner=N, role="assumption",
         ),
         ProofStep(
             j0_vec, Integer(0),
-            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition, "
+            rule=assumptions[0] + ": [C'1] of (TM)₀ ⊕ (T*M)_θ, "
             "vector component on the probe" + cite,
             justification="cited" if c1_vec is None else "proven",
-            children=c1_vec, provenance_tag="theorem",
+            children=c1_vec, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t,
         ),
         ProofStep(
             jr_form, j0_form,
@@ -823,10 +830,10 @@ def prove_r_twisted_jacobi(
         ),
         ProofStep(
             j0_form, Integer(0),
-            rule="[C'1] of (TM)₀ ⊕ (T*M)_θ under the declared Poisson condition, "
+            rule=assumptions[0] + ": [C'1] of (TM)₀ ⊕ (T*M)_θ, "
             "form component (paired with every X)" + cite,
             justification="cited" if c1_form is None else "proven",
-            children=c1_form, provenance_tag="theorem",
+            children=c1_form, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t,
         ),
     ]
     chain = ProofChain(steps)
@@ -844,7 +851,7 @@ def prove_r_twisted_jacobi(
         from_axioms=assumptions + (thm_d.name,),
         notes="PDF 14f.iii / Watamura §3; lhs is the vector Jacobiator on the probe, "
         "the form Jacobiator is carried in the chain",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 

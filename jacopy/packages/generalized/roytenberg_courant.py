@@ -103,7 +103,7 @@ def _zero_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 

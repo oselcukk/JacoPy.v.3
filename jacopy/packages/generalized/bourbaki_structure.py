@@ -465,7 +465,7 @@ def prove_locality_is_symbol(
             "𝔻 first-order with symbol 𝕃 (6.8)",
         ),
         notes="pre-metric-bourbaki.pdf Cor 6.1",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -643,7 +643,7 @@ def prove_right_leibniz_from_r_invariance(
             "(definitional)",
         ),
         notes="pre-metric-bourbaki.pdf eq (7.2)",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -804,5 +804,5 @@ def prove_left_leibniz_bourbaki(
             "Cor 6.1 (proven)",
         ),
         notes="pre-metric-bourbaki.pdf Prop 6.1 / (7.9) route",
-    )
+    ).with_structural_requires()
     return chain, theorem

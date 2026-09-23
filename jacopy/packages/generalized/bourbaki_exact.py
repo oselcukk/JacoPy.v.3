@@ -459,7 +459,7 @@ def prove_lemma_91(
             "exactness ρ∘χ = 0 (8.5)",
         ),
         notes="pre-metric-bourbaki.pdf Lemma 9.1",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -515,7 +515,7 @@ def _cited_zero_proof(
                 generality="generic-function",
                 from_axioms=from_axioms,
                 notes=notes,
-            )
+            ).with_structural_requires()
             return chain, theorem
     nf = _normalize(engine, target, registry)
     raise ProofFailure(

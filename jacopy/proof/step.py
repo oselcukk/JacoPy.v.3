@@ -36,6 +36,7 @@ class ProofStep:
         "_provenance_tag",
         "_owner",
         "_role",
+        "_cites",
     )
 
     #: Recognised provenance tags. ``None`` means the step carries no
@@ -61,6 +62,7 @@ class ProofStep:
         provenance_tag: Optional[str] = None,
         owner=None,
         role: Optional[str] = None,
+        cites=None,
     ) -> None:
         if not isinstance(before, Expr):
             raise TypeError("ProofStep.before must be an Expr")
@@ -85,6 +87,9 @@ class ProofStep:
         # the logical role of the fired rule (Faz 8 step 3a):
         # "definition" | "assumption" | "theorem" | None (unrecorded)
         self._role = role
+        # the cited Theorem record when this step is a citation (Faz 8
+        # step 3b): its requirements propagate to the citing proof
+        self._cites = cites
         self._children: List[ProofStep] = []
         if children:
             for ch in children:
@@ -133,6 +138,12 @@ class ProofStep:
         ``"assumption"`` (a declared axiom), ``"theorem"``, or ``None``
         when the step recorded none (hand-built / legacy)."""
         return self._role
+
+    @property
+    def cites(self):
+        """The cited :class:`~jacopy.proof.theorems.Theorem` when this
+        step is a theorem citation, else ``None``."""
+        return self._cites
 
     def add_child(self, step: "ProofStep") -> None:
         """Nest ``step`` under this one as a sub-proof."""

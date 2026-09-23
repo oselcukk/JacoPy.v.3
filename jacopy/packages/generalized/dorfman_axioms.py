@@ -99,7 +99,7 @@ def prove_dorfman_c3_redundant(
             "the B 4.11 tactic verbatim (every metric algebroid is "
             "almost-Courant)"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -109,7 +109,7 @@ def _c3_engine(
     registry: Optional[PropertyRegistry],
 ) -> ExpansionEngine:
     eng = ExpansionEngine(
-        [TheoremDefinition(t) for t in theorems]
+        [TheoremDefinition(t, allow_legacy=True) for t in theorems]  # pre-3b records: explicit
     )
     for d in algebroid_engine(alg, registry=registry).definitions:
         eng.register(d)
@@ -368,5 +368,5 @@ def prove_dorfman_c2_redundant(
             "uchino.pdf Rem 2.3 closing remark, written out: the "
             "paper says 'in a similar way' without proof"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem

@@ -381,8 +381,15 @@ def _tilde_engine(N, registry, *, declare_fi: bool):
     eng.register(InteriorAnticommuteDefinition())
     eng.register(NambuSharpPairingEvalDefinition(N, registry))
     if declare_fi:
-        eng.register(NambuMorphismDeclaration(N))
-        eng.register(FISharpPairingSwapDefinition(N))
+        # the DECLARED fundamental identity is an assumption owned by N
+        # (Faz 8 step 3b): the engine then owns the name of N.pi, and FI
+        # instance theorems cite back against it
+        morph = NambuMorphismDeclaration(N)
+        morph.owner = N
+        swap = FISharpPairingSwapDefinition(N)
+        swap.owner = N
+        eng.register(morph)
+        eng.register(swap)
     return eng
 
 
@@ -448,15 +455,17 @@ def _cite_fi_instances(engine, N, omega, eta, W, h, registry):
                                         "opt-in fundamental identity"
                                     ),
                                     provenance_tag="axiom",
+                                    owner=N,
+                                    role="assumption",
                                 )
                             ]
                         ),
                         generality="instance",
-                    )
+                    ).with_structural_requires()
                 )
                 names.append(nm)
     for nm in names:
-        engine.register(TheoremDefinition(book.get(nm)))
+        engine.register(TheoremDefinition(book.get(nm), allow_legacy=True))  # pre-3b records: explicit
 
 
 def _prove_condition(

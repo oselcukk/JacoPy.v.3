@@ -46,7 +46,7 @@ def _jacobi_theorem(E, u, v, w, reg):
     return Theorem(
         name="jacobi_E", statement="J^E(u,v,w) = 0", lhs=J, rhs=out,
         proof=ProofChain(steps), from_axioms=("Leibniz-Jacobi (E)",), owner=E,
-    )
+    ).with_structural_requires()
 
 
 def test_owners_are_recorded_on_rules_steps_and_theorems(twins):
@@ -65,11 +65,20 @@ def test_owners_are_recorded_on_rules_steps_and_theorems(twins):
 
 def test_mixing_rules_of_two_same_named_structures_is_rejected(twins):
     reg, E1, E2, u, v, w = twins
-    with pytest.raises(AmbiguousOwnerError, match="cannot distinguish them"):
-        ExpansionEngine([*declaration_rules(E1, reg), *algebroid_engine(E2, registry=reg).definitions])
+    # E₂'s definitional rules assume nothing E₁ does not: registering them
+    # first and then E₁'s declared rules is a legitimate STRENGTHENING
+    # (the name's owner becomes E₁); the other order would smuggle E₁'s
+    # axioms into E₂'s engine and is refused
+    eng = ExpansionEngine([*algebroid_engine(E2, registry=reg).definitions, *declaration_rules(E1, reg)])
+    assert eng.owners == {"E": E1}
     eng2 = algebroid_engine(E2, registry=reg)
+    eng2.register(declaration_rules(E1, reg)[0])
+    assert eng2.owners == {"E": E1}
+    E_other = algebroid("E", Bundle("F"), declare=("lie",))       # same name, another bundle: different
+    with pytest.raises(AmbiguousOwnerError, match="cannot distinguish them|share the tree-visible name"):
+        ExpansionEngine([*declaration_rules(E1, reg), *declaration_rules(E_other, reg)])
     with pytest.raises(AmbiguousOwnerError):
-        eng2.register(declaration_rules(E1, reg)[0])
+        algebroid_engine(E1, registry=reg).register(declaration_rules(E_other, reg)[0])
     # the same structure twice is one owner (equal objects)
     E1b = algebroid("E", Bundle("E"), declare=("lie",))
     eng = ExpansionEngine([*declaration_rules(E1, reg), *declaration_rules(E1b, reg)])
@@ -86,12 +95,15 @@ def test_citing_a_theorem_in_the_wrong_same_named_structure_is_rejected(twins):
     eng2 = algebroid_engine(E2, registry=reg)
     # without ownership the citation would fire: the lhs is structurally E₂'s Jacobiator too
     assert TheoremDefinition(thm).matches(Jacobiator("E", u, v, w))
-    with pytest.raises(AmbiguousOwnerError):
-        eng2.register(TheoremDefinition(thm))
+    # in E₂'s engine the citation is registered INERT and reported (3b): the
+    # requirement "jacobi of E₁" is not met by E₂, and E₂ stays the owner
+    eng2.register(TheoremDefinition(thm))
+    assert not eng2.definitions[-1].citable and eng2.owners == {"E": E2}
+    assert not eng2.definitions[-1].matches(Jacobiator("E", u, v, w))
     # in its own structure the citation is welcome
     eng1 = algebroid_engine(E1, registry=reg)
     eng1.register(TheoremDefinition(thm))
-    assert eng1.owners == {"E": E1}
+    assert eng1.owners == {"E": E1} and eng1.definitions[-1].citable
     # the book refuses the record under the other owner
     book = TheoremBook()
     book.add(thm)
@@ -110,13 +122,18 @@ def test_scope_binds_one_structure_per_name(twins):
     assert scope.owner("E") is E1 and scope.bound == {"E": E1}
     with pytest.raises(KeyError):
         scope.owner("F")
-    # checking items: E₁'s rules pass, E₂'s are refused, unowned items are ignored
+    # checking items: E₁'s rules pass; E₂ = (E, ∅) is a SUB-structure of E₁
+    # (same name and bundle, fewer declarations) — its items assume less
+    # and pass too (3b refinement); a SUPER-structure's items are refused
     assert scope.check(declaration_rules(E1, reg)) == {"E": E1}
     assert scope.check_engine(algebroid_engine(E1, registry=reg)) == {"E": E1}
+    assert scope.check(algebroid_engine(E2, registry=reg).definitions) == {"E": E1}
+    assert scope.check([E2]) == {"E": E1}
+    E_more = E1.with_declarations("metric-invariance")
     with pytest.raises(AmbiguousOwnerError, match="is bound to"):
-        scope.check(algebroid_engine(E2, registry=reg).definitions)
+        scope.check(declaration_rules(E_more, reg))
     with pytest.raises(AmbiguousOwnerError):
-        scope.check([E2])
+        scope.check([algebroid("E", Bundle("F"), declare=("lie",))])  # another bundle: a different structure
     assert check_owners([]) == {} and check_owners([None]) == {}   # nothing owned, nothing claimed
 
 

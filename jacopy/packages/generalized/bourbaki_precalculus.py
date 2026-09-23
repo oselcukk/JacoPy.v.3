@@ -549,7 +549,7 @@ def prove_standard_symmetric_part(
             "d ℝ-additivity (first-order operator)",
         ),
         notes="pre-metric-bourbaki.pdf Thm 9.1",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -663,7 +663,7 @@ def prove_standard_metric_invariance(
             "quintet definitional rules (Def 9.1)",
         ),
         notes="pre-metric-bourbaki.pdf Thm 9.1",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 

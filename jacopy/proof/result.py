@@ -19,7 +19,9 @@ keeps the answers apart:
   generality when it is an instance proof (an instance certificate is
   never upgraded to a general one); ``legacy`` — an assumption that is
   RECORDED but not structurally verified: a step whose rule carries no
-  role, a textual ``from_axioms`` entry no step accounts for, a
+  role, an unverified citation. ``textual`` — a ``from_axioms`` prose
+  entry no step accounts for: kept visible, NOT a verification input
+  (prose is not a trust boundary; the structural record is). Also a
   theorem record whose chain does not literally run ``lhs → rhs``.
   Legacy entries are kept, never dropped (step 3b decides what may
   cite them).
@@ -47,7 +49,7 @@ from jacopy.proof.chain import ProofChain
 from jacopy.proof.step import ProofStep
 
 STATUSES = ("CLOSED", "RESIDUAL", "BUDGET", "INVALID")
-ASSUMPTION_KINDS = ("declared", "structure", "scope", "legacy")
+ASSUMPTION_KINDS = ("declared", "structure", "scope", "legacy", "textual")
 PROVENANCE_KINDS = ("theorem", "definition", "canonicalization", "engine-step", "computation")
 
 _CANONICAL_RULES = ("simplify", "canonicalize", "normalize", "collect", "sort", "flatten", "distribute")
@@ -198,6 +200,17 @@ def _classify(steps: Iterable[ProofStep], principal=None):
             owner = getattr(s, "owner", None)
             if tag == "theorem":
                 bump(provenance, "theorem", s.rule, owner)
+                cited = getattr(s, "cites", None)
+                if cited is not None:
+                    # TRANSITIVE requirements (Faz 8 step 3b): a verified
+                    # citation contributes its own requirements; an
+                    # unverified (legacy) one is itself a legacy assumption
+                    if getattr(cited, "legacy", True):
+                        bump(assumptions, "legacy", f"unverified citation: theorem {cited.name}", getattr(cited, "owner", None), s.before)
+                    else:
+                        for a in cited.requires:
+                            if a.kind in ("declared", "legacy", "scope"):
+                                bump(assumptions, a.kind, a.name, a.owner, a.example)
             elif tag == "axiom":
                 if role == "assumption":
                     bump(assumptions, "declared", s.rule, owner, s.before)
@@ -213,7 +226,10 @@ def _classify(steps: Iterable[ProofStep], principal=None):
                 low = s.rule.lower()
                 kind = "canonicalization" if any(low.startswith(c) or f" {c}" in low for c in _CANONICAL_RULES) else "engine-step"
                 bump(provenance, kind, s.rule, owner)
-            visit(s.children)
+            # a whole-expression wrapper carries its local step as the only
+            # child with the same rule: that child is the same event
+            kids = [c for c in s.children if not (len(s.children) == 1 and c.rule == s.rule and c.provenance_tag == tag)]
+            visit(kids)
 
     visit(steps)
     req = [Assumption(k, n, o, c, ex) for (k, n, o, c, ex) in assumptions.values()]
@@ -228,6 +244,19 @@ def _classify(steps: Iterable[ProofStep], principal=None):
         text = f"{o!r}" + (f" declaring {sorted(decl)}" if decl is not None else "")
         req.append(Assumption("structure", text, o))
     return tuple(req), tuple(prov)
+
+
+def _whole_step(before: Expr, after: Expr, local: ProofStep) -> ProofStep:
+    """A whole-expression step carrying the engine's local step (a
+    subterm rewrite) as its child; the same rule, tag, owner, role and
+    citation, so classification is unchanged."""
+    if local.before == before and local.after == after:
+        return local
+    return ProofStep(
+        before, after, rule=local.rule, justification=local.justification, children=[local],
+        provenance_tag=local.provenance_tag, owner=local.owner, role=getattr(local, "role", None),
+        cites=getattr(local, "cites", None),
+    )
 
 
 def _reversed_step(s: ProofStep) -> ProofStep:
@@ -282,6 +311,13 @@ class ProofResult:
     def legacy(self) -> Tuple[Assumption, ...]:
         """The recorded-but-unverified assumptions (never dropped)."""
         return tuple(a for a in self.requires if a.legacy)
+
+    @property
+    def textual(self) -> Tuple[Assumption, ...]:
+        """The record's ``from_axioms`` prose no step accounts for:
+        visible, never dropped, NOT a verification input (prose is not
+        a trust boundary; the chain's structural record is)."""
+        return tuple(a for a in self.requires if a.kind == "textual")
 
     @property
     def theorems_cited(self) -> Tuple[Provenance, ...]:
@@ -377,17 +413,11 @@ class ProofResult:
         legacy: List[Assumption] = []
         for text in theorem.from_axioms:
             if text not in known and not any(text in k for k in known):
-                legacy.append(Assumption("legacy", f"from_axioms: {text}", theorem.owner))
-        literal = bool(len(chain)) and chain.initial == goal.lhs and chain.final == goal.rhs
-        if not literal:
-            legacy.append(
-                Assumption(
-                    "legacy",
-                    "theorem record: the stored chain does not literally run lhs → rhs "
-                    "(pre-3a prover shape; closure asserted by the record)",
-                    theorem.owner,
-                )
-            )
+                legacy.append(Assumption("textual", f"from_axioms: {text}", theorem.owner))
+        # (a Theorem's chain is the engine's transcript of LOCAL rewrites;
+        # its endpoints are not the whole sides, so the chain's shape is
+        # not judged here — the record asserts the closure, the
+        # requirements say what it depends on)
         req = req + tuple(legacy)
         if theorem.generality == "instance":
             req = req + (Assumption("scope", "instance proof — the certificate is not generalized"),)
@@ -395,6 +425,25 @@ class ProofResult:
             goal=goal, status="CLOSED", requires=req, provenance=prov, chain=chain, residual=None,
             budget=Budget(len(chain)), generality=theorem.generality, owner=theorem.owner,
         )
+
+
+def structural_requires(theorem) -> Tuple[Assumption, ...]:
+    """The requirement records of a theorem derived from its OWN chain
+    (Faz 8 step 3b): declared axiom instances, the structures behind
+    them, the transitive requirements of cited theorems, a scope entry
+    for an instance proof, and a legacy entry for every ``from_axioms``
+    text no step accounts for. The chain's endpoint shape is not a
+    requirement and is not judged here (``ProofResult.from_theorem``
+    flags it)."""
+    req, prov = _classify(theorem.proof.steps, principal=theorem.owner)
+    known = {a.name for a in req} | {p.name for p in prov}
+    out = list(req)
+    for text in theorem.from_axioms:
+        if text not in known and not any(text in k for k in known):
+            out.append(Assumption("textual", f"from_axioms: {text}", theorem.owner))
+    if theorem.generality == "instance" and not any(a.kind == "scope" for a in out):
+        out.append(Assumption("scope", "instance proof — the certificate is not generalized"))
+    return tuple(out)
 
 
 # ------------------------------------------------------------------ #
@@ -453,7 +502,10 @@ def prove(
             nxt, step = engine.expand_once(cur)
             if step is None:
                 break
-            steps.append(step)
+            # the engine's step is LOCAL (the rewritten subterm); the
+            # result's chain is a whole-expression transcript, so wrap it
+            # — the local step rides along as the child that names the site
+            steps.append(_whole_step(cur, nxt, step))
             cur = nxt
         else:
             nxt, step = engine.expand_once(cur)
@@ -506,4 +558,5 @@ __all__ = [
     "check_goal",
     "package_version",
     "prove",
+    "structural_requires",
 ]

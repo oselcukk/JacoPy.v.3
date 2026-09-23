@@ -473,11 +473,11 @@ def _cite_closedness_instances(
                         f"closed symplectic "
                         f"({S.omega._repr_inner()}): dω = 0",
                     ),
-                )
+                ).with_structural_requires()
             )
             names.append(name)
     if names:
-        cite(engine, book, *names)
+        cite(engine, book, *names, allow_legacy=True)
 
 
 def prove_hamiltonian_flow_invariance(

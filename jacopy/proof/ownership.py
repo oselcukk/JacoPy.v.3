@@ -86,6 +86,25 @@ def _same_owner(a, b) -> bool:
     return a is b or a == b
 
 
+def is_substructure(owner, of) -> bool:
+    """True when ``owner`` is the SAME structure as ``of`` with at most
+    the same declarations: same tree-visible name and bundle, and
+    ``owner.declarations ⊆ of.declarations``. Rules and theorems of a
+    sub-structure are valid in the super-structure (they assume less);
+    the converse is not (Faz 8 step 3b refinement of 2c). Structures
+    without a declaration record are compatible only when equal."""
+    if _same_owner(owner, of):
+        return True
+    d1, d2 = getattr(owner, "declarations", None), getattr(of, "declarations", None)
+    if d1 is None or d2 is None:
+        return False
+    return (
+        owner_name(owner) == owner_name(of)
+        and getattr(owner, "bundle", None) == getattr(of, "bundle", None)
+        and set(d1) <= set(d2)
+    )
+
+
 def check_owners(items: Iterable, *, bound: Optional[Dict[str, object]] = None) -> Dict[str, object]:
     """Group the owners of ``items`` by tree-visible name; raise
     :class:`AmbiguousOwnerError` when one name is claimed by two
@@ -99,15 +118,19 @@ def check_owners(items: Iterable, *, bound: Optional[Dict[str, object]] = None) 
         name = owner_name(owner)
         prev = seen.get(name)
         if prev is None:
-            if bound is not None and name in bound and not _same_owner(bound[name], owner):
+            if bound is not None and name in bound and not is_substructure(owner, bound[name]):
                 raise AmbiguousOwnerError(
                     f"the name {name!r} is bound to {_describe(bound[name])}, "
-                    f"but this item is owned by {_describe(owner)}; the tree "
-                    "cannot distinguish them — bind one structure per name, "
-                    "or transfer the item explicitly"
+                    f"but this item is owned by {_describe(owner)}, which assumes "
+                    "more or is a different structure; the tree cannot distinguish "
+                    "them — bind one structure per name, or transfer the item explicitly"
                 )
-            seen[name] = owner
-        elif not _same_owner(prev, owner):
+            seen[name] = bound[name] if (bound is not None and name in bound) else owner
+        elif is_substructure(owner, prev):
+            continue  # a sub-structure's item is valid under the structure already seen
+        elif is_substructure(prev, owner):
+            seen[name] = owner  # the new item's structure dominates: it becomes the name's owner
+        else:
             raise AmbiguousOwnerError(
                 f"two different structures share the tree-visible name {name!r}: "
                 f"{_describe(prev)} vs {_describe(owner)}; their rules and theorems "
@@ -246,6 +269,7 @@ class OwnerScope:
 
 __all__ = [
     "AmbiguousOwnerError",
+    "is_substructure",
     "OwnerScope",
     "chain_owners",
     "check_owners",

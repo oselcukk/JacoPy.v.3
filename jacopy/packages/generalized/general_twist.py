@@ -257,7 +257,7 @@ def _zero_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -300,6 +300,7 @@ def _cited_transport_theorem(
     from_axioms,
     notes,
     label,
+    owner=None,
 ) -> Tuple[ProofChain, Theorem]:
     """``target = 0`` in two honest legs: the structural identity
     ``target → instance`` followed by the cited declared-zero
@@ -318,6 +319,8 @@ def _cited_transport_theorem(
             "declared axiom instance; Ψ⁻¹(0) = 0"
         ),
         provenance_tag="axiom",
+        owner=owner,
+        role="assumption",  # a DECLARED axiom of the algebroid (Faz 8 step 3b)
     )
     chain = ProofChain([structural, cite])
     theorem = Theorem(
@@ -329,7 +332,7 @@ def _cited_transport_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -372,7 +375,7 @@ def _conditional_transport_theorem(
         generality="generic-function",
         from_axioms=("Ψ/Ψ⁻¹ invertibility + linearity",),
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -530,7 +533,7 @@ def prove_general_twist_jacobi(
                 "PDF 13j general procedure — conditional form; "
                 "declare 'jacobi' for the full theorem"
             ),
-        )
+        ).with_structural_requires()
         return chain, theorem
     return _cited_transport_theorem(
         name,
@@ -552,6 +555,7 @@ def prove_general_twist_jacobi(
         ),
         notes="PDF 13j general procedure",
         label=label,
+        owner=alg,
     )
 
 
@@ -644,6 +648,7 @@ def prove_general_twist_symmetric_part(
         ),
         notes="PDF 13j: the primed operators 𝔻', g'",
         label=label,
+        owner=alg,
     )
 
 
@@ -745,4 +750,5 @@ def prove_general_twist_invariance(
         ),
         notes="PDF 13j: g' = g(Ψ·,Ψ·), ρ' = ρ∘Ψ",
         label=label,
+        owner=alg,
     )

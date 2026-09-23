@@ -421,6 +421,7 @@ name=f"anchor_morphism_{alg.name}_{u_name}_{v_name}",
             "generic f and auxiliary section w"
         ),
     )
+    theorem = theorem.with_structural_requires()  # Faz 8 step 3b: structural requirements
     return chain, theorem
 
 
@@ -546,6 +547,8 @@ def prove_right_leibniz_from_metric(
         rule=c1.name,
         justification="declared axiom applied at the composite site",
         provenance_tag="axiom",
+        owner=c1.owner,
+        role=c1.role,
     )
     n_a, steps_a = _normalize(after_c1, engine, registry)
     step_leg_a = ProofStep(
@@ -678,13 +681,14 @@ name=f"right_leibniz_{alg.name}_{u_name}_{v_name}_{f_name}",
         generality="generic-function",
         from_axioms=(
             f"metric invariance ({alg.name})",
-            "non-degeneracy of the E-metric (definitional)",
+            "non-degeneracy of g (agreement on generic section w)",
         ),
         notes=(
             "B 4.11 first identity: ρ(u)(g(f·v, w)) expanded two ways "
             "against a generic auxiliary section w"
         ),
     )
+    theorem = theorem.with_structural_requires()  # Faz 8 step 3b: structural requirements
     return chain, theorem
 
 
@@ -756,6 +760,7 @@ name=f"symmetric_part_swap_{alg.name}_{f._repr_inner()}"
         generality="generic-function",
         from_axioms=(f"symmetric part ({alg.name})",),
     )
+    t_c2 = t_c2.with_structural_requires()  # Faz 8 step 3b: structural requirements
     step_c2 = ProofStep(
         t_c2.lhs,
         t_c2.rhs,
@@ -784,7 +789,7 @@ name=f"symmetric_part_swap_{alg.name}_{f._repr_inner()}"
     book.add(t_c2)
     book.add(t_rl)
     engine = algebroid_engine(alg, registry=registry)
-    cite(engine, book, t_c2.name, t_rl.name)
+    cite(engine, book, t_c2.name, t_rl.name, allow_legacy=True)
     lhs = alg.bracket(fu, v)
     rhs = Sum(
         Product(f, alg.bracket(u, v)),
@@ -831,10 +836,11 @@ name=f"left_leibniz_{alg.name}_{f_name}_{u_name}_{v_name}",
         from_axioms=(
             f"symmetric part ({alg.name})",
             f"metric invariance ({alg.name})",
-            "non-degeneracy of the E-metric (definitional)",
+            "non-degeneracy of g (agreement on generic section w)",
         ),
         notes="B 4.11 second identity",
     )
+    theorem = theorem.with_structural_requires()  # Faz 8 step 3b: structural requirements
     return chain, theorem
 
 
@@ -917,6 +923,8 @@ def prove_locality_anchor_annihilation(
         rule=am.name,
         justification="declared axiom applied at the composite site",
         provenance_tag="axiom",
+        owner=am.owner,
+        role=am.role,
     )
     n_a, steps_a = _normalize(Act(after_am, h), _engine(), registry)
     step_leg_a = ProofStep(
@@ -1022,6 +1030,7 @@ name=(
         ),
         notes="MC §3: (ρ ∘ L)(Df, u, v) = 0 on local pre-Leibniz",
     )
+    theorem = theorem.with_structural_requires()  # Faz 8 step 3b: structural requirements
     return chain, theorem
 
 
@@ -1052,7 +1061,7 @@ def prove_anchor_predator_vanishes(
     book = TheoremBook()
     book.add(theorem)
     engine = algebroid_engine(alg, registry=registry)
-    cite(engine, book, theorem.name)
+    cite(engine, book, theorem.name, allow_legacy=True)
     return ExpandAndSimplify().prove(
         anchor_predator(alg, u, v),
         _Int(0),

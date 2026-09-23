@@ -89,7 +89,7 @@ def _jacobi_engine(
             if t.name not in book:
                 book.add(t)
                 used.append(t)
-                cite(engine, book, t.name)
+                cite(engine, book, t.name, allow_legacy=True)
     return engine, used
 
 
@@ -250,10 +250,10 @@ def covariant_jacobi_theorems(
         proof=chain,
         generality="instance",
         from_axioms=(
-            "Lie bracket definition",
+            "Jacobi inside the connection direction",
             "connection direction linearity",
         ),
-    )
+    ).with_structural_requires()
     neg_chain = ProofChain(list(chain.steps))
     neg_chain.append(
         ProofStep(
@@ -271,7 +271,7 @@ def covariant_jacobi_theorems(
         proof=neg_chain,
         generality="instance",
         from_axioms=thm.from_axioms,
-    )
+    ).with_structural_requires()
     return thm, thm_neg
 
 
@@ -306,7 +306,7 @@ def prove_bianchi_second(
     ):
         book.add(t)
         used.append(t)
-        _cite(engine, book, t.name)
+        _cite(engine, book, t.name, allow_legacy=True)
     chain = ExpandAndSimplify().prove(
         lhs, Integer(0), registry=registry, engine=engine
     )

@@ -287,8 +287,8 @@ def prove_abstract_double_jacobi_form(
                 rhs=Integer(0),
                 proof=thm.proof,
                 generality="instance",
-            )
-            eng.register(TheoremDefinition(variant))
+            ).with_structural_requires()
+            eng.register(TheoremDefinition(variant, allow_legacy=True))  # instance record: explicit
             used.append(variant)
     chain = ExpandAndSimplify().prove(
         Pairing(lhs, probe),

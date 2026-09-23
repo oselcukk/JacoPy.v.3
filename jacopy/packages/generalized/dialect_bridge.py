@@ -207,7 +207,7 @@ def prove_koszul_dialects_agree(
             "Cartan magic formula (engine rule)",
         ),
         notes="declaration-free",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -300,5 +300,5 @@ def prove_theta_form_jacobi_by_citation(
             "CITED: prove_general_koszul_jacobi",
         ),
         notes="the citation route the Nambu-dialect [C'1] proof lacked",
-    )
+    ).with_structural_requires()
     return chain, theorem

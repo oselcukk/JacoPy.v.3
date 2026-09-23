@@ -134,7 +134,7 @@ def _antisym_theorem(reg, X, Y, f):
         rhs=Neg(Act(lie_bracket(Y, X), f)),
         proof=chain,
         generality="generic-function",
-    )
+    ).with_structural_requires()
 
 
 class TestTheoremBook:

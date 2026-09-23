@@ -544,10 +544,10 @@ def prove_d_tilde_squared_on_exacts(
         proof=thm.proof,
         generality="instance",
         from_axioms=thm.from_axioms,
-    )
+    ).with_structural_requires()
     book.add(neg)
     engine = tilde_engine(P, registry=registry)
-    cite(engine, book, thm.name, neg.name)
+    cite(engine, book, thm.name, neg.name, allow_legacy=True)
     lhs = MultiEval(
         d_tilde(P, d_tilde(P, f)),
         d(g),
@@ -657,7 +657,7 @@ def _cite_jacobi_instances(engine, P, triples, registry) -> None:
                     proof=thm.proof,
                     generality="instance",
                     from_axioms=thm.from_axioms,
-                )
+                ).with_structural_requires()
             )
             names.append(neg_name)
         if not d_lift:
@@ -688,10 +688,10 @@ def _cite_jacobi_instances(engine, P, triples, registry) -> None:
                     proof=lift_chain,
                     generality="instance",
                     from_axioms=thm.from_axioms,
-                )
+                ).with_structural_requires()
             )
             names.append(name)
-    cite(engine, book, *names)
+    cite(engine, book, *names, allow_legacy=True)
 
 
 def prove_lie_tilde_commutator_on_exacts(
@@ -912,11 +912,11 @@ def _cite_sn_general_instances(engine, P, triples, registry) -> None:
                             f"Poisson ({P.pi._repr_inner()}): "
                             "[π, π]_SN = 0",
                         ),
-                    )
+                    ).with_structural_requires()
                 )
                 names.append(name)
     if names:
-        cite(engine, book, *names)
+        cite(engine, book, *names, allow_legacy=True)
 
 
 def prove_lie_tilde_d_iota_commutation_general(

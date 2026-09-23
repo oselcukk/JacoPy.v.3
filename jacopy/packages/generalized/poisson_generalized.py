@@ -267,7 +267,7 @@ def _zero_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -464,6 +464,8 @@ def _theta_jacobi_instances(engine, N, forms3, vectors, h, registry):
                     rule=rule,
                     justification="instance + congruence",
                     provenance_tag=prov,
+                    owner=N,
+                    role=("assumption" if prov == "axiom" else None),
                 )
             ]
         )
@@ -631,7 +633,7 @@ def prove_theta_jacobi(
             "tilde-Dorfman + Koszul/tilde calculus definitions",
         ),
         notes="PDF 14f / Watamura §2.2 — [C'1] closed 2026-09-10",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 

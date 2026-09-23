@@ -475,7 +475,7 @@ def prove_poisson_jacobi(
             f"Poisson ({P.pi._repr_inner()}): [π, π]_SN = 0",
         ),
         notes="Jacobi ⟺ [π,π]_SN = 0, mechanized on the generators",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -576,10 +576,10 @@ def prove_hamiltonian_morphism(
         proof=neg_chain,
         generality="instance",
         from_axioms=thm.from_axioms,
-    )
+    ).with_structural_requires()
     book.add(thm_neg)
     engine = showcase_engine(P, registry=registry)
-    cite(engine, book, thm.name, thm_neg.name)
+    cite(engine, book, thm.name, thm_neg.name, allow_legacy=True)
     lhs = Act(P.hamiltonian(P.bracket(f, g)), h)
     rhs = Act(LieBracketVF(P.hamiltonian(f), P.hamiltonian(g)), h)
     return ExpandAndSimplify().prove(

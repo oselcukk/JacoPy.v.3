@@ -17,7 +17,6 @@ from jacopy.proof.result import (
     ProofResult,
     Provenance,
     check_goal,
-    prove,
 )
 from jacopy.proof.ownership import (
     AmbiguousOwnerError,
@@ -76,7 +75,6 @@ __all__ = [
     "ProofResult",
     "Provenance",
     "check_goal",
-    "prove",
     "AmbiguousOwnerError",
     "OwnerScope",
     "chain_owners",

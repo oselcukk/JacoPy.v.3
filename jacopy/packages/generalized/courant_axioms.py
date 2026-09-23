@@ -517,7 +517,7 @@ def courant_engine(
         rules.append(CourantInvarianceDeclaration(alg))
     rules.append(DLeibnizDefinition(alg, registry))
     for t in theorems:
-        rules.append(TheoremDefinition(t))
+        rules.append(TheoremDefinition(t, allow_legacy=True))  # pre-3b records: explicit
     if theorems and alg.declares("antisymmetric"):
         # The composite-slot swap is useful exactly when a cited
         # right-Leibniz theorem can open the swapped bracket.
@@ -771,7 +771,7 @@ def prove_left_leibniz_c3(
             "uchino.pdf Prop 2.1(i): ρ(x)(f·y, w) expanded two ways "
             "against a generic probe section w"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -920,7 +920,7 @@ def prove_anchor_annihilates_d(
             "uchino.pdf Prop 2.1(ii): ρ([x, f·y])(h) expanded two "
             "ways; the defect is (x,y)·ρ(Df)(h)"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -1132,7 +1132,7 @@ def prove_d_pairing_formula(
             "uchino.pdf Prop 2.2: ρ(f·x)(y,y) expanded two ways; "
             "the defect is (x,y)·(2(Df,y) − ρ(y)f)"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -1226,7 +1226,7 @@ def prove_d_numeric_homogeneity(
             "homogeneity previously gated behind a declaration is "
             "derivable — ⟨D(cf) − cDf, y⟩ = 0 for generic y"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -1350,7 +1350,7 @@ def prove_leibniz_from_c3(
             "uchino.pdf Rem 2.1: [x, f·g·y] peeled two ways; no "
             "(L) rule is registered in either engine"
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -1645,5 +1645,5 @@ def prove_bracket_with_d(
             "non-degeneracy under the same assumptions — both "
             "forms of Rem 2.2 close with NO extra axiom."
         ),
-    )
+    ).with_structural_requires()
     return chain, theorem

@@ -155,6 +155,6 @@ def register_d_squared_zero(
             "Lie bracket definition",
         ),
         notes="p ≥ 1 cases scheduled with the Cartan-relation pass (2.D).",
-    )
+    ).with_structural_requires()
     book.add(thm)
     return thm

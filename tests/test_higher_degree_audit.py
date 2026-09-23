@@ -357,7 +357,7 @@ class TestSubsetReplacement:
                 [ProofStep(lhs, rhs, rule="r", justification="j")]
             ),
             generality="instance",
-        )
+        ).with_structural_requires()
         rule = TheoremDefinition(thm)
         big = Sum(a, b, e)
         assert rule.matches(big)
@@ -383,7 +383,7 @@ class TestSubsetReplacement:
                 [ProofStep(lhs, rhs, rule="r", justification="j")]
             ),
             generality="instance",
-        )
+        ).with_structural_requires()
         rule = TheoremDefinition(thm)
         big = Sum(a, b, e)
         assert not rule.matches(big)

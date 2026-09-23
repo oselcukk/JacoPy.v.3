@@ -383,7 +383,7 @@ def _zero_theorem(
         generality="generic-function",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -515,7 +515,7 @@ def prove_chi_chi_bracket_vanishes(
             "non-degeneracy of the R-valued metric",
         ),
         notes="pre-metric-bourbaki.pdf Thm 9.2 proof",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 

@@ -128,7 +128,7 @@ def _cite_compat_instances(engine, P, U, Y, forms_, registry):
                     rhs=thm.rhs,
                     proof=thm.proof,
                     generality="instance",
-                )
+                ).with_structural_requires()
             )
             names.append(nm)
     bare = showcase_engine(P, registry=registry, declare_poisson=False)
@@ -212,7 +212,7 @@ def _cite_compat_instances(engine, P, U, Y, forms_, registry):
                     rhs=Integer(0),
                     proof=ProofChain(steps),
                     generality="instance",
-                )
+                ).with_structural_requires()
             )
             names.append(nm)
     # MAGIC-difference family: the residual may carry the
@@ -281,7 +281,7 @@ def _cite_compat_instances(engine, P, U, Y, forms_, registry):
                         rhs=Integer(0),
                         proof=ProofChain(steps),
                         generality="instance",
-                    )
+                    ).with_structural_requires()
                 )
                 names.append(nm)
     # COMBINED family: magic-defect + bridge in one seed (the 4.38
@@ -340,11 +340,11 @@ def _cite_compat_instances(engine, P, U, Y, forms_, registry):
                         rhs=Integer(0),
                         proof=ProofChain([step]),
                         generality="instance",
-                    )
+                    ).with_structural_requires()
                 )
                 names.append(nm)
     if names:
-        cite(engine, book, *names)
+        cite(engine, book, *names, allow_legacy=True)
 
 
 def prove_compat_condition_one(

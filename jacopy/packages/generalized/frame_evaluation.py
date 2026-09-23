@@ -114,7 +114,7 @@ def _zero_theorem(
         generality="instance",
         from_axioms=from_axioms,
         notes=notes,
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -408,5 +408,5 @@ def prove_boxtimes_components_are_413(
             "antisymmetriser definition",
         ),
         notes="E6 paper (4.13)/(4.14) agree with the ½ normalisation",
-    )
+    ).with_structural_requires()
     return chain, theorem

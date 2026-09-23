@@ -230,14 +230,25 @@ class ExpansionEngine:
         """Append ``definition`` to the rule list (and dispatch index)."""
         if not isinstance(definition, Definition):
             raise TypeError("ExpansionEngine.register expects a Definition")
-        owner = getattr(definition, "owner", None)
+        # A theorem citation is bound to THIS engine (a bound copy: the
+        # caller's object stays reusable elsewhere) and checked against
+        # the engine's structures; a blocked citation is registered
+        # inert, reported, and claims no owner (Faz 8 step 3b).
+        bind = getattr(definition, "bound_to", None)
+        citable = True
+        if bind is not None:
+            definition = bind(self)
+            citable = definition.citable
+        owner = getattr(definition, "owner", None) if citable else None
         if owner is not None:
             from jacopy.proof.ownership import check_owners
 
             # refuses a second, different structure under a name already
             # owned in this engine (ambiguous: the tree cannot tell them
-            # apart)
-            self._owners.update(check_owners([definition], bound=self._owners))
+            # apart); a sub-structure's rule is covered by the owner
+            # already present, a super-structure's rule STRENGTHENS the
+            # engine and becomes the name's owner
+            self._owners = check_owners([*self._owners.values(), definition])
         order = len(self._definitions)
         self._definitions.append(definition)
         anchor = definition.anchor
@@ -292,6 +303,7 @@ class ExpansionEngine:
             provenance_tag=tag,
             owner=getattr(d, "owner", None),
             role=("theorem" if tag == "theorem" else getattr(d, "role", None)),
+            cites=(getattr(d, "theorem", None) if tag == "theorem" else None),
         )
         if self._mode == "foundational" and d.is_theorem:
             builder = d.theorem_proof_builder()

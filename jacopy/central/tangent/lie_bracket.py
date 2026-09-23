@@ -440,7 +440,7 @@ def jacobi_combination_theorems(
         generality="instance",
         from_axioms=("Lie bracket definition",),
         notes="section-level Jacobi via agreement on generators",
-    )
+    ).with_structural_requires()
     neg_chain = ProofChain(list(chain.steps))
     neg_chain.append(
         ProofStep(
@@ -458,7 +458,7 @@ def jacobi_combination_theorems(
         proof=neg_chain,
         generality="instance",
         from_axioms=thm.from_axioms,
-    )
+    ).with_structural_requires()
     return thm, thm_neg
 
 

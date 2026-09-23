@@ -98,17 +98,18 @@ def test_legacy_assumptions_are_kept_not_dropped(alg):
     # one a step accounts for is not duplicated
     chain, thm = prove_anchor_morphism(E, u, v, f, registry=reg)
     res = ProofResult.from_theorem(thm)
-    assert not any("from_axioms" in a.name for a in res.legacy)
+    assert not any("from_axioms" in a.name for a in res.requires)
     thm2 = Theorem(name="t2", statement="s", lhs=thm.lhs, rhs=thm.rhs, proof=thm.proof,
                    from_axioms=thm.from_axioms + ("a hypothesis nobody recorded",), owner=E)
     res2 = ProofResult.from_theorem(thm2)
-    assert [a for a in res2.legacy if "nobody recorded" in a.name]
-    # a record whose chain does not literally run lhs → rhs is marked, not trusted silently
+    # prose no step accounts for is a visible TEXTUAL dependency, not a verification input
+    assert [a for a in res2.textual if "nobody recorded" in a.name] and not res2.legacy
+    assert "requires textual" in res2.summary()
+    # a Theorem's chain is a transcript of LOCAL rewrites; the record asserts
+    # the closure, the requirements say what it depends on
     thm3 = Theorem(name="t3", statement="s", lhs=X, rhs=Y, proof=thm.proof)
     res3 = ProofResult.from_theorem(thm3)
-    assert any("does not literally run" in a.name for a in res3.legacy)
-    assert res3.status == "CLOSED"                                     # the record asserts closure …
-    assert res3.legacy                                                 # … and the result says on what
+    assert res3.status == "CLOSED" and res3.declared
 
 
 def test_instance_generality_is_never_upgraded(alg):

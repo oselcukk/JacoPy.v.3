@@ -215,5 +215,5 @@ def prove_levi_civita_unique(
             "non-degeneracy of the metric (definitional)",
         ),
         notes="Koszul right-hand side is connection-free",
-    )
+    ).with_structural_requires()
     return chain, theorem

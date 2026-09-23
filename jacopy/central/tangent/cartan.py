@@ -185,10 +185,10 @@ def prove_with_bracket_identities(
                     generality="generic-function",
                     from_axioms=("Lie bracket definition",),
                     notes="agreement on generators: V(f) = 0 for generic f",
-                )
+                ).with_structural_requires()
                 book.add(thm)
                 used.append(thm)
-                cite(engine, book, thm.name)
+                cite(engine, book, thm.name, allow_legacy=True)
                 repaired = True
             if not repaired:
                 raise
@@ -457,7 +457,7 @@ def register_cartan_theorems(
             proof=prove_cartan_magic_on_functions(X, f, registry=registry),
             generality="generic-function",
             from_axioms=("intrinsic d (Cartan-TM)", "interior product"),
-        ),
+        ).with_structural_requires(),
         Theorem(
             name="cartan_magic_on_one_forms",
             statement="⟨L_X ω, Y⟩ = ⟨ι_X dω + d ι_X ω, Y⟩",
@@ -475,7 +475,7 @@ def register_cartan_theorems(
                 "intrinsic L (Cartan-TM)",
                 "interior product",
             ),
-        ),
+        ).with_structural_requires(),
         Theorem(
             name="L_iota_commutator",
             statement="[L_X, ι_Y] ω = ι_{[X,Y]} ω  (1-forms)",
@@ -487,7 +487,7 @@ def register_cartan_theorems(
             proof=prove_L_iota_commutator(omega, X, Y, registry=registry),
             generality="generic-function",
             from_axioms=("intrinsic L (Cartan-TM)", "interior product"),
-        ),
+        ).with_structural_requires(),
         Theorem(
             name="iota_anticommute",
             statement="ι_X ι_Y + ι_Y ι_X = 0  (2-forms)",
@@ -498,8 +498,9 @@ def register_cartan_theorems(
             rhs=Integer(0),
             proof=prove_iota_anticommute(two_form, X, Y, registry=registry),
             generality="generic-function",
-            from_axioms=("interior product", "alternating canonical form"),
-        ),
+            from_axioms=("interior product",),
+            notes="closes by the alternating canonical form (a canonicalization, not an axiom)",
+        ).with_structural_requires(),
     )
     for thm in entries:
         book.add(thm)

@@ -270,7 +270,7 @@ def prove_projector_fixes_locally_exact_forms(
         notes="MC Prop 4.2; the TM part of the projector is NOT fixed by this "
         "argument — see prove_linear_projector_is_a_locality_projector and "
         "prove_projector_differs_from_pr2_on_a_frame",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -390,7 +390,7 @@ def prove_linear_projector_is_a_locality_projector(
         ),
         notes="MC Prop 4.2: the proof fixes P on ker ρ only; the B-field family "
         "ι_U B is the antisymmetric subfamily C(U,·) = ι_U B",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -441,7 +441,7 @@ def prove_b_field_projector_is_a_locality_projector(
             "interior product and Cartan calculus definitions (engine rules)",
         ),
         notes="membership only; P_B = pr₂ when B = 0 — non-uniqueness needs a witness",
-    )
+    ).with_structural_requires()
     return chain, theorem
 
 
@@ -521,5 +521,5 @@ def prove_projector_differs_from_pr2_on_a_frame(
             "wedge evaluation and interior product definitions",
         ),
         notes="witnessed non-identity (a literal 1), not a failed reduction",
-    )
+    ).with_structural_requires()
     return chain, theorem
