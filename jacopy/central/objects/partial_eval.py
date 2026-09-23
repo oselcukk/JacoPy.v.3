@@ -96,6 +96,35 @@ class PartialEval(Expr):
                 raise TypeError("fixed slot values must be Expr")
             items.append((pos, value))
         items.sort(key=lambda it: it[0])
+        if isinstance(head, PartialEval):
+            # NESTED partial evaluation flattens onto the original head:
+            # T(a, ·, ·)(b, ·) is T(a, b, ·). The outer positions index
+            # the inner map's OPEN slots; the flags must agree
+            # (2026-09-23 audit, F3: nesting silently dropped the
+            # alternating flag).
+            if arity != head.n_open:
+                raise ValueError(
+                    f"the inner map has {head.n_open} open slot(s), got arity {arity}"
+                )
+            if alternating != head.alternating or slot_kind != head.slot_kind:
+                raise ValueError(
+                    "nested partial evaluation must keep the inner map's "
+                    "alternating / slot_kind flags"
+                )
+            inner_open = head.open_positions
+            merged = dict(head.fixed)
+            for pos, value in items:
+                merged[inner_open[pos]] = value
+            head, arity = head.head, head.arity
+            items = sorted(merged.items(), key=lambda it: it[0])
+        known = _known_arity(head)
+        if known is not None and known != arity:
+            # a head with a known signature fixes its own arity: a
+            # bilinear metric cannot be viewed as a trilinear map
+            # (2026-09-23 audit, F2)
+            raise ValueError(
+                f"{head._repr_inner()} has {known} slot(s), not {arity}"
+            )
         if not items:
             raise ValueError("PartialEval needs at least one fixed slot")
         if len(items) >= arity:
@@ -151,27 +180,37 @@ class PartialEval(Expr):
 
     @property
     def degree(self) -> Degree:
-        """Form degree of the open map when the head is an alternating
-        form on vector slots: ``|T| − j`` (a ``k``-form with ``j`` slots
-        fixed is a ``(k−j)``-form). Raises :class:`ValueError` when the
-        head's degree is not determinable or the map is not a form."""
+        """Form degree of the OPEN map, when it is a form: an
+        alternating head on vector slots gives ``|T| − j``; a single
+        open vector slot of ANY head is a 1-form (a ``(0,1)``-tensor,
+        e.g. ``g(X, ·)``). A non-alternating map with several open
+        slots is a covariant tensor, not a form: the attribute is
+        absent (``AttributeError``, so ``getattr(…, None)`` protocols
+        pass over it; 2026-09-23 audit, F1)."""
         from jacopy.algebra.derivation import degree_of
 
-        if not (self._alternating and self._slot_kind == "vector"):
-            raise ValueError("PartialEval.degree: not an alternating form")
-        return degree_of(self._head, None) + Degree.const(-len(self._fixed))
+        if self._slot_kind == "vector":
+            if self._alternating:
+                return degree_of(self._head, None) + Degree.const(-len(self._fixed))
+            if self.n_open == 1:
+                return Degree.const(1)
+        raise AttributeError("PartialEval.degree: the open map is not a form")
 
     @property
     def wedge_degree(self) -> Degree:
-        """Multivector degree of the open map when the head is an
-        alternating multivector on covector slots (``|P| − j``)."""
+        """Multivector degree of the OPEN map, when it is one: an
+        alternating head on covector slots gives ``|P| − j``; a single
+        open covector slot of any head is a vector (degree 1)."""
         from jacopy.algebra.derivation import degree_of
 
-        if not (self._alternating and self._slot_kind == "covector"):
-            raise ValueError("PartialEval.wedge_degree: not an alternating multivector")
-        lift = getattr(self._head, "wedge_degree", None)
-        base = lift if isinstance(lift, Degree) else degree_of(self._head, None)
-        return base + Degree.const(-len(self._fixed))
+        if self._slot_kind == "covector":
+            if self._alternating:
+                lift = getattr(self._head, "wedge_degree", None)
+                base = lift if isinstance(lift, Degree) else degree_of(self._head, None)
+                return base + Degree.const(-len(self._fixed))
+            if self.n_open == 1:
+                return Degree.const(1)
+        raise AttributeError("PartialEval.wedge_degree: the open map is not a multivector")
 
     # ---- Expr protocol ---------------------------------------------- #
 
@@ -254,15 +293,31 @@ class PartialEval(Expr):
 # --------------------------------------------------------------------- #
 
 
+def _known_arity(head: Expr) -> Optional[int]:
+    """The head's slot count when its signature is known (``g``: 2,
+    a ``p``-form: ``p``, a ``(q, r)`` tensor: ``q + r``), else ``None``."""
+    from jacopy.central.objects.tensor import signature_of
+
+    if isinstance(head, PartialEval):
+        return head.n_open
+    sig = signature_of(head)
+    return None if sig is None else sig[0] + sig[1]
+
+
 def _flags_for(head: Expr, alternating: Optional[bool], slot_kind: Optional[str]):
     """Default ``alternating``/``slot_kind`` from the head's nature:
     forms and multivectors are alternating (vector / covector slots),
-    metrics, inverse metrics and general tensors are not."""
+    metrics, inverse metrics and general tensors are not; a partial
+    map keeps its own flags."""
     from jacopy.central.objects.form import Form
     from jacopy.central.objects.metric import InverseMetric, Metric
     from jacopy.central.objects.multivector import PVector
     from jacopy.central.objects.tensor import Tensor
 
+    if isinstance(head, PartialEval):
+        alternating = head.alternating if alternating is None else alternating
+        slot_kind = head.slot_kind if slot_kind is None else slot_kind
+        return alternating, slot_kind
     if alternating is None:
         alternating = isinstance(head, (Form, PVector))
     if slot_kind is None:
@@ -276,16 +331,16 @@ def _flags_for(head: Expr, alternating: Optional[bool], slot_kind: Optional[str]
 
 
 def _arity_for(head: Expr, arity: Optional[int]) -> int:
+    known = _known_arity(head)
     if arity is not None:
+        if known is not None and known != arity:
+            raise ValueError(f"{head._repr_inner()} has {known} slot(s), not {arity}")
         return arity
-    from jacopy.central.objects.tensor import signature_of
-
-    sig = signature_of(head)
-    if sig is None:
+    if known is None:
         raise ValueError(
             "the head's arity is not determinable — pass arity= explicitly"
         )
-    return sig[0] + sig[1]
+    return known
 
 
 def partial_eval(

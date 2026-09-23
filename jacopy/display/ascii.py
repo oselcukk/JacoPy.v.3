@@ -78,8 +78,11 @@ def _int(expr: Integer, ctx: int) -> str:
 
 @_register(Rational)
 def _rat(expr: Rational, ctx: int) -> str:
+    # a fraction is a quotient, not an atom: as a power base or
+    # exponent it needs parentheses — ``3/2**2`` would read as 3/4
+    # (2026-09-23 audit, F5)
     text = f"{expr.p}/{expr.q}"
-    return _wrap(text, _P_ATOM if expr.p >= 0 else _P_NEG, ctx)
+    return _wrap(text, _P_PRODUCT if expr.p >= 0 else _P_NEG, ctx)
 
 
 @_register(Neg)

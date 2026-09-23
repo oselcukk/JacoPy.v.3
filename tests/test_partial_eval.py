@@ -203,3 +203,56 @@ def test_three_slots_fixed_of_a_four_linear_map(cast):
     # fixing further slots composes: T(α, ·, ·, ·) then (β at 1, X at 2)
     w = musical_view(T, al).with_fixed({1: be, 2: X})
     assert w == v
+
+
+# ---- 2026-09-23 audit pins (4DD888E_PROGRESS_REVIEW) --------------------- #
+
+
+def test_one_open_vector_slot_is_a_one_form_for_any_head(cast):
+    # F1: g(X,·) is a 1-form (signature (0,1)) — degree 1 even though g
+    # is symmetric; scaling it simplifies; a form's partial map answers
+    # the research layer's exterior-degree query.
+    from jacopy.algorithms.simplify import simplify
+    from jacopy.research.engine_assembly import _wedge_degree
+
+    reg, f, g, X, Y, Z, W, al, be, s3 = cast
+    v = musical_view(Metric("g"), X)
+    assert signature_of(v) == (0, 1) and degree_of(v) == Degree.const(1)
+    simplify(Product(Integer(2), v), reg)
+    assert _wedge_degree(musical_view(s3, X), reg) == 2
+    # a symmetric map with TWO open slots is a tensor, not a form
+    T = Tensor("S", upper=0, lower=3)
+    with pytest.raises(AttributeError):
+        musical_view(T, X).degree
+    with pytest.raises(ValueError):
+        degree_of(musical_view(T, X))
+
+
+def test_known_arity_cannot_be_contradicted(cast):
+    # F2: a bilinear metric is not a trilinear map; a 3-form has 3 slots.
+    reg, f, g, X, Y, Z, W, al, be, s3 = cast
+    with pytest.raises(ValueError):
+        partial_eval(Metric("g"), X, None, None)
+    with pytest.raises(ValueError):
+        partial_eval(s3, X, None)
+    with pytest.raises(ValueError):
+        musical_view(Metric("g"), X, arity=3)
+    with pytest.raises(ValueError):
+        PartialEval(Metric("g"), 3, {0: X})
+
+
+def test_nested_partial_maps_flatten_and_keep_their_type(cast):
+    # F3: σ(X,·,·)(Y,·) IS σ(X,Y,·) — one node, alternating kept.
+    reg, f, g, X, Y, Z, W, al, be, s3 = cast
+    nested = musical_view(musical_view(s3, X), Y)
+    assert nested == musical_view(s3, X, Y)
+    assert nested.alternating and signature_of(nested) == (0, 1)
+    assert degree_of(nested) == Degree.const(1)
+    assert _prove(
+        Pairing(nested, Z), MultiEval(s3, X, Y, Z, alternating=True, slot_kind="vector"), reg
+    ).steps
+    # nesting must not change the flags or claim more open slots
+    with pytest.raises(ValueError):
+        PartialEval(musical_view(s3, X), 2, {0: Y}, alternating=False, slot_kind="vector")
+    with pytest.raises(ValueError):
+        PartialEval(musical_view(s3, X), 3, {0: Y}, alternating=True, slot_kind="vector")

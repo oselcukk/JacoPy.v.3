@@ -157,7 +157,8 @@ class TestToLatex:
         assert to_latex(fr.dual().field("b")) == "e^{b}"
         assert to_latex(KroneckerDelta("a", "b")) == r"\delta^{a}_{b}"
         assert to_latex(anholonomy_coefficient(fr, "c", "a", "b")) == r"\gamma^{c}_{ab}"
-        assert to_latex(InverseMetric("g")) == "g^{-1}"
+        assert to_latex(Metric("g").inverse()) == "g^{-1}"   # the default name carries the inverse once
+        assert to_latex(InverseMetric("h")) == "h"             # a custom name is the user's choice
         assert to_latex(Flat(Metric("g"))) == r"g^{\flat}"
         assert to_latex(Torsion("∇", X, Y)) == r"T\!\left(X,\, Y\right)"
         assert to_latex(Curvature("∇", X, Y, Z)) == r"R\!\left(X,\, Y\right)Z"
@@ -221,6 +222,28 @@ def test_ascii_sign_normalisation(cast):
     assert to_ascii(Sum(f, Neg(g))) == "f - g"
     assert to_ascii(Product(Sum(f, g), X)) == "(f + g) * X"
     assert to_ascii(Wedge(om, et)) == "ω ∧ η"
+    # a fraction is a quotient: parenthesised as a power base / exponent
+    # (2026-09-23 audit, F5: "3/2**2" reads as 3/4)
+    assert to_ascii(Power(Rational(3, 2), Integer(2))) == "(3/2)**2"
+    assert to_ascii(Power(f, Rational(1, 2))) == "f**(1/2)"
+    assert eval(to_ascii(Power(Rational(3, 2), Integer(2))), {"__builtins__": {}}, {}) == 2.25
+
+
+@pytest.mark.skipif(shutil.which("pdflatex") is None, reason="pdflatex not installed")
+def test_default_inverse_metric_compiles_with_pdflatex():
+    # F4: g⁻¹ rendered ``g^{-1}^{-1}`` was a pdflatex "Double superscript".
+    from jacopy.central.objects.metric import Metric as _M
+
+    doc = _document_of(to_latex(_M("g").inverse()))
+    run = _pdflatex(doc)
+    assert run.returncode == 0 and run.pdf_exists, run.stdout[-1500:]
+
+
+def _document_of(snippet: str) -> str:
+    return (
+        "\\documentclass{article}\n\\usepackage{amsmath}\n\\usepackage{amssymb}\n"
+        "\\begin{document}\n$" + snippet + "$\n\\end{document}\n"
+    )
 
 
 # ---- chains, steps, theorems ---------------------------------------- #

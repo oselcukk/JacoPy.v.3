@@ -542,7 +542,10 @@ def _load_central_handlers() -> None:
 
     @_register(InverseMetric)
     def _inv_metric(expr, _ctx):
-        return f"{latex_name(expr.name)}^{{-1}}"
+        # the default name already carries the ⁻¹ (``g⁻¹``); a custom
+        # name is the user's choice — never add a second inverse
+        # (2026-09-23 audit, F4: ``g^{-1}^{-1}`` is a pdflatex error)
+        return latex_name(expr.name)
 
     @_register(AlgebroidBracket)
     def _alg_bracket(expr, _ctx):
