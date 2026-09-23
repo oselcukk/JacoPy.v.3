@@ -180,37 +180,42 @@ class PartialEval(Expr):
 
     @property
     def degree(self) -> Degree:
-        """Form degree of the OPEN map, when it is a form: an
-        alternating head on vector slots gives ``|T| − j``; a single
-        open vector slot of ANY head is a 1-form (a ``(0,1)``-tensor,
-        e.g. ``g(X, ·)``). A non-alternating map with several open
-        slots is a covariant tensor, not a form: the attribute is
-        absent (``AttributeError``, so ``getattr(…, None)`` protocols
-        pass over it; 2026-09-23 audit, F1)."""
-        from jacopy.algebra.derivation import degree_of
+        """Form degree of the OPEN map, derived from the open slots'
+        actual type (2026-09-23 audit, remaining F1):
 
-        if self._slot_kind == "vector":
-            if self._alternating:
-                return degree_of(self._head, None) + Degree.const(-len(self._fixed))
-            if self.n_open == 1:
-                return Degree.const(1)
+        * an alternating map on vector slots with ``k − j`` open slots
+          is a ``(k − j)``-form — the declared arity and alternation
+          decide, no degree of the head is consulted;
+        * any map whose open signature is ``(0, 1)`` is a 1-form
+          (``g(X, ·)``, ``T(α, X, ·)`` of a ``(1,2)``-tensor …).
+
+        A non-alternating map with several open slots is a covariant
+        tensor, not a form: the attribute is absent (``AttributeError``,
+        so ``getattr(…, None)`` protocols pass over it)."""
+        if self._alternating and self._slot_kind == "vector":
+            return Degree.const(self.n_open)
+        if self._open_signature() == (0, 1):
+            return Degree.const(1)
         raise AttributeError("PartialEval.degree: the open map is not a form")
 
     @property
     def wedge_degree(self) -> Degree:
-        """Multivector degree of the OPEN map, when it is one: an
-        alternating head on covector slots gives ``|P| − j``; a single
-        open covector slot of any head is a vector (degree 1)."""
-        from jacopy.algebra.derivation import degree_of
-
-        if self._slot_kind == "covector":
-            if self._alternating:
-                lift = getattr(self._head, "wedge_degree", None)
-                base = lift if isinstance(lift, Degree) else degree_of(self._head, None)
-                return base + Degree.const(-len(self._fixed))
-            if self.n_open == 1:
-                return Degree.const(1)
+        """Multivector degree of the OPEN map: an alternating map on
+        covector slots with ``k − j`` open slots is a ``(k − j)``-vector;
+        any map with open signature ``(1, 0)`` is a vector."""
+        if self._alternating and self._slot_kind == "covector":
+            return Degree.const(self.n_open)
+        if self._open_signature() == (1, 0):
+            return Degree.const(1)
         raise AttributeError("PartialEval.wedge_degree: the open map is not a multivector")
+
+    def _open_signature(self):
+        from jacopy.central.objects.tensor import signature_of
+
+        try:
+            return signature_of(self)
+        except (TypeError, ValueError):  # pragma: no cover
+            return None
 
     # ---- Expr protocol ---------------------------------------------- #
 

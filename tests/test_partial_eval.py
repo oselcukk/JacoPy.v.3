@@ -256,3 +256,23 @@ def test_nested_partial_maps_flatten_and_keep_their_type(cast):
         PartialEval(musical_view(s3, X), 2, {0: Y}, alternating=False, slot_kind="vector")
     with pytest.raises(ValueError):
         PartialEval(musical_view(s3, X), 3, {0: Y}, alternating=True, slot_kind="vector")
+
+
+def test_degree_is_derived_from_the_open_slots_for_any_head(cast):
+    # 2026-09-23 recheck (remaining F1): the open map's type decides —
+    # (0,1) is a 1-form and (1,0) a vector for ANY head (mixed tensors
+    # included), and an alternating vector-slot map with n open slots
+    # is an n-form even for an opaque head declared through the node.
+    from jacopy.core.expr import Symbol
+    from jacopy.research.engine_assembly import _wedge_degree
+
+    reg, f, g, X, Y, Z, W, al, be, s3 = cast
+    p = partial_eval(Tensor("T", upper=1, lower=2), al, X, None)
+    assert signature_of(p) == (0, 1) and degree_of(p) == Degree.const(1)
+    q = partial_eval(Tensor("S", upper=2, lower=1), None, al, X)
+    assert signature_of(q) == (1, 0) and _wedge_degree(q, reg) == 1
+    assert degree_of(musical_view(Tensor("C", upper=0, lower=2), X)) == Degree.const(1)
+    a = PartialEval(Symbol("A"), 3, {0: X}, alternating=True, slot_kind="vector")
+    assert signature_of(a) == (0, 2) and degree_of(a) == Degree.const(2)
+    # still no false form for a symmetric multi-open map
+    assert getattr(musical_view(Tensor("R", upper=0, lower=3), X), "degree", None) is None
