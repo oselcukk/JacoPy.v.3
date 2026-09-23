@@ -65,6 +65,11 @@ class ComponentInput:
         total: bool = False,
         holonomic: bool = False,
     ) -> None:
+        known = getattr(getattr(fr, "bundle", None), "dim", None)
+        if dim is not None and known is not None and known != dim:
+            raise ValueError(
+                f"declared dim {dim} contradicts the frame's bundle dimension {known}"
+            )
         self._frame = fr
         self._dim = dim
         self._connection = connection

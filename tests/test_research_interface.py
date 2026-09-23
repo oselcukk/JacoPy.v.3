@@ -622,3 +622,21 @@ def test_bracket_rejects_a_wrong_output_type():
     B = Bracket(T, lambda u, v: wrong.zero())
     with pytest.raises(TypeError, match="must return a section"):
         B(T.zero(), T.zero())
+
+
+def test_section_slots_use_the_common_type_query():
+    # audit 7a11162 R1–R3: kind ≠ degree, foreign bundle ≠ unknown,
+    # a known mixed sum is invalid; valid module operations pass
+    from jacopy.central.objects import Bundle, Form, PVector
+
+    T = SectionType.generalized_tangent()
+    (om,) = forms("ko", degree=1)
+    (B,) = forms("kB", degree=2)
+    U, V = vector_fields("kU kV")
+    with pytest.raises(TypeError):
+        SectionType.exceptional().section(Integer(0), PVector("Π", degree=2), Integer(0))
+    with pytest.raises(TypeError):
+        T.section(U, Form("w_F", degree=1, bundle=Bundle("F")))
+    with pytest.raises(TypeError):
+        T.section(U, Sum(om, B))
+    assert T.section(Sum(U, V), Neg(om)).unverified_slots == ()

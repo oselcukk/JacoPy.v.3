@@ -84,40 +84,56 @@ from jacopy.central.tangent.exterior import d
 # --------------------------------------------------------------------- #
 
 
-def _form_degree(expr: Expr, registry) -> Optional[int]:
-    try:
-        return degree_of(expr, registry).as_int()
-    except ValueError:
-        return None
+def _kind(expr: Expr, registry):
+    from jacopy.central.objects.kind import kind_of
+
+    return kind_of(expr, registry)
+
+
+def _on_tm(k, what: str) -> None:
+    if k.bundle is not None and not getattr(k.bundle, "is_tangent", False):
+        raise TypeError(f"{what} lives on the bundle {k.bundle.name!r}, not on TM ⊕ T*M")
 
 
 def _require_form(expr: Expr, degree: int, what: str, registry) -> None:
-    if expr == Integer(0):
+    k = _kind(expr, registry)
+    if k.kind == "zero":
         return  # the zero form inhabits every degree
-    k = _form_degree(expr, registry)
-    if k != degree:
+    if k.kind != "form" or k.degree != degree:
         raise TypeError(
-            f"{what} must be a {degree}-form; got "
-            + ("an object of undeterminable degree" if k is None else f"degree {k}")
+            f"{what} must be a {degree}-form on TM; got "
+            + ("an object of unknown type" if not k.known else f"a {k.kind}"
+               + (f" of degree {k.degree}" if k.degree is not None else ""))
         )
+    _on_tm(k, what)
 
 
 def _require_vector(expr: Expr, what: str, registry) -> None:
-    lift = getattr(expr, "wedge_degree", None)
-    if not (isinstance(lift, Degree) and lift == Degree.const(1)):
-        raise TypeError(f"{what} must be a vector field (exterior degree 1)")
+    k = _kind(expr, registry)
+    if k.kind == "zero":
+        return
+    if k.kind != "vector":
+        raise TypeError(f"{what} must be a vector field on TM; got " + ("an object of unknown type" if not k.known else f"a {k.kind}"))
+    _on_tm(k, what)
 
 
 def _require_function(expr: Expr, what: str, registry) -> None:
-    from jacopy.central.calculus.scalars import is_scalar_function
-
-    if not is_scalar_function(expr, registry):
+    k = _kind(expr, registry)
+    if k.kind not in ("function", "zero"):
         raise TypeError(f"{what} must be a declared scalar function")
 
 
-def _require_bundle_map(C: Expr, what: str) -> None:
-    if signature_of(C) != (0, 2):
-        raise TypeError(f"{what} must be a (0,2)-tensor (a bundle map TM → T*M)")
+def _require_bundle_map(C: Expr, what: str, registry=None) -> None:
+    """``C`` must be a bundle map ``TM → T*M``: a ``(0,2)``-tensor or a
+    2-form on TM (the antisymmetric case), or zero. A bivector (a
+    (2,0)-tensor) is refused even though its degree is 2."""
+    k = _kind(C, registry)
+    if k.kind == "zero":
+        return
+    ok = (k.kind == "tensor" and k.signature == (0, 2)) or (k.kind == "form" and k.degree == 2)
+    if not ok:
+        raise TypeError(f"{what} must be a (0,2)-tensor or a 2-form on TM (a bundle map TM → T*M)")
+    _on_tm(k, what)
 
 
 # --------------------------------------------------------------------- #
@@ -263,10 +279,13 @@ def prove_projector_fixes_locally_exact_forms(
 # --------------------------------------------------------------------- #
 
 
-def linear_projector(C: Expr, U: Expr, omega: Expr) -> Tuple[Expr, Expr]:
-    """``P_C(U, ω) := (0, ω + C(U, ·))`` for a ``(0,2)``-tensor ``C``
-    read as the bundle map ``TM → T*M``, ``U ↦ C(U, ·)``."""
-    _require_bundle_map(C, "C")
+def linear_projector(C: Expr, U: Expr, omega: Expr, *, registry=None) -> Tuple[Expr, Expr]:
+    """``P_C(U, ω) := (0, ω + C(U, ·))`` for a ``(0,2)``-tensor (or 2-form)
+    ``C`` read as the bundle map ``TM → T*M``, ``U ↦ C(U, ·)``; ``C = 0``
+    is ``pr₂`` itself."""
+    _require_bundle_map(C, "C", registry)
+    if C == Integer(0):
+        return (Integer(0), omega)
     return (Integer(0), Sum(omega, musical_view(C, U)))
 
 
@@ -346,12 +365,12 @@ def prove_linear_projector_is_a_locality_projector(
     ``ker ρ``). This certifies "is a locality projector" and nothing
     about ``P_C ≠ pr₂`` (true for ``C = 0`` as well); the
     non-uniqueness is a separate, witnessed theorem."""
-    _require_bundle_map(C, "C")
+    _require_bundle_map(C, "C", registry)
     _check_section_inputs(U, V, omega, eta, h, g, registry)
     engine = _engine(registry)
     steps = _run_checks(
         "linear_projector",
-        _projector_checks(lambda u, w: linear_projector(C, u, w), U, V, omega, eta, h, g),
+        _projector_checks(lambda u, w: linear_projector(C, u, w, registry=registry), U, V, omega, eta, h, g),
         engine,
         registry,
     )
@@ -454,6 +473,12 @@ def prove_projector_differs_from_pr2_on_a_frame(
     alternation, which the Cartan engine does not know)."""
     if dim < 2:
         raise ValueError("the witness needs a frame of dimension ≥ 2 (a 2-form on a line is 0)")
+    known = getattr(getattr(fr, "bundle", None), "dim", None)
+    if known is not None and known != dim:
+        raise ValueError(
+            f"the frame's bundle has dimension {known}, not {dim} — a witness on "
+            "inconsistent data certifies nothing"
+        )
     from jacopy.core.pairing import Pairing
     from jacopy.core.wedge import Wedge
 

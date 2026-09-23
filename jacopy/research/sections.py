@@ -30,6 +30,8 @@ class Slot:
     kind: str
     degree: int = 0
     name: str = ""
+    #: owning bundle (``None`` = the tangent bundle ``TM``)
+    bundle: object = None
 
     def __post_init__(self) -> None:
         if self.kind not in ("vector", "form", "function"):
@@ -48,80 +50,49 @@ class Slot:
         return f"Λ{_sup(self.degree)}T*M"
 
     def accepts(self, expr: Expr) -> str:
-        """Three-valued type check of a component against this slot:
-        ``"valid"`` (known and matching), ``"invalid"`` (known and
-        wrong — a 1-form in a vector slot, a 5-form in the Λ² slot, a
-        vector in a form slot), ``"unknown"`` (an opaque expression
-        whose kind cannot be determined — accepted, but recorded as
-        unverified). Zero inhabits every slot. Only bilinear
-        combinations (sums, negations, scalar products) are looked
-        through; the decision never guesses (2026-09-22 library audit,
-        Faz 8 step 1c)."""
-        return _accepts(self, expr)
+        """Three-valued type check of a component against this slot
+        through the common type query
+        (:func:`jacopy.central.objects.kind.kind_of`): ``"valid"``
+        (kind, degree and — when known — bundle match), ``"invalid"``
+        (a known wrong kind, degree, bundle, or a sum of different
+        known types), ``"unknown"`` (an opaque expression — accepted,
+        recorded as unverified). Zero inhabits every slot. Never
+        guesses: a bivector is not a 2-form, a form on another bundle
+        is not a form here."""
+        from jacopy.central.objects.bundle import TM
+        from jacopy.central.objects.kind import kind_of
+
+        k = kind_of(expr)
+        if k.kind == "zero":
+            return "valid"
+        if k.kind == "unknown":
+            return "unknown"
+        if k.kind == "mismatch":
+            return "invalid"
+        want = self.bundle if self.bundle is not None else TM
+        if k.bundle is not None and not _same_bundle(k.bundle, want):
+            return "invalid"
+        if self.kind == "vector":
+            return "valid" if k.kind == "vector" else "invalid"
+        if self.kind == "function":
+            return "valid" if k.kind == "function" else "invalid"
+        if k.kind != "form":
+            return "invalid"
+        if k.degree is None:
+            return "unknown"
+        return "valid" if k.degree == self.degree else "invalid"
 
 
-def _component_kind(expr: Expr):
-    """``("vector", None)``, ``("form", k)``, ``("function", None)`` or
-    ``None`` when unknown."""
-    from jacopy.algebra.derivation import Derivation, degree_of
-    from jacopy.core.symbolic_degree import Degree
-
-    if expr == Integer(0):
-        return ("zero", None)
-    if isinstance(expr, (Neg,)):
-        return _component_kind(expr.arg)
-    if isinstance(expr, Sum):
-        kinds = {_component_kind(c) for c in expr.children}
-        kinds.discard(("zero", None))
-        if len(kinds) == 1:
-            return kinds.pop()
-        return None
-    if isinstance(expr, Product):
-        from jacopy.central.calculus.scalars import is_scalar_function
-
-        rest = [c for c in expr.children if not is_scalar_function(c, None)]
-        if len(rest) == 1:
-            return _component_kind(rest[0])
-        if not rest:
-            return ("function", None)
-        return None
-    lift = getattr(expr, "wedge_degree", None)
-    if isinstance(expr, Derivation) and isinstance(lift, Degree) and lift == Degree.const(1):
-        return ("vector", None)
-    from jacopy.central.objects.form import Form
-
-    if isinstance(expr, Form):
-        try:
-            return ("form", expr.degree.as_int())
-        except ValueError:
-            return None
-    deg = getattr(expr, "degree", None)
-    if isinstance(deg, Degree) and not isinstance(expr, Derivation):
-        try:
-            k = deg.as_int()
-        except ValueError:
-            return None
-        if k is None:
-            return None
-        return ("function", None) if k == 0 else ("form", k)
-    return None
-
-
-def _accepts(slot: "Slot", expr: Expr) -> str:
-    kind = _component_kind(expr)
-    if kind is None:
-        return "unknown"
-    if kind[0] == "zero":
-        return "valid"
-    if slot.kind == "vector":
-        return "valid" if kind[0] == "vector" else "invalid"
-    if slot.kind == "function":
-        return "valid" if kind[0] == "function" else "invalid"
-    if kind[0] != "form":
-        return "invalid"
-    if kind[1] is None:
-        return "unknown"
-    return "valid" if kind[1] == slot.degree else "invalid"
+def _same_bundle(a, b) -> bool:
+    """Bundle identity for typing: the tangent bundle in any of its
+    dimension flavours is one bundle (``TM`` symbolic vs ``TM`` with a
+    declared dimension), two declared dimensions must agree."""
+    if a == b:
+        return True
+    if getattr(a, "is_tangent", False) and getattr(b, "is_tangent", False):
+        da, db = getattr(a, "dim", None), getattr(b, "dim", None)
+        return da is None or db is None or da == db
+    return False
 
 
 def _sup(n: int) -> str:

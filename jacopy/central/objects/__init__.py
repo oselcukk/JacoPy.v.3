@@ -51,6 +51,7 @@ from jacopy.central.objects.musical import (
     flat,
     sharp,
 )
+from jacopy.central.objects.kind import Kind, kind_of
 from jacopy.central.objects.partial_eval import (
     PartialEval,
     musical_view,
@@ -127,6 +128,8 @@ __all__ = [
     "sharp",
     # item 8w generalization: partial evaluation of k-linear maps
     "PartialEval",
+    "Kind",
+    "kind_of",
     "musical_view",
     "partial_eval",
     # multivectors

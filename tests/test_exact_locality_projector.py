@@ -114,3 +114,25 @@ def test_zero_gap_from_alternation_is_not_certified(cast):
     chain, thm = prove_b_field_projector_is_a_locality_projector(Bfg, UB, om, h, g2, registry=reg)
     assert all("non-identity" not in s.justification for s in chain.steps)
     assert "≠" not in thm.statement
+
+
+def test_inputs_are_typed_by_kind_not_degree(cast):
+    # audit 7a11162 R1/R2/R4/R5
+    from jacopy.central.objects import Bundle, Form, PVector, frame
+    from jacopy.central.objects.bundle import TangentBundle
+    from jacopy.core.expr import Product, Sum
+
+    reg, f1, f2, g1, g2, h, U, V, om, et, B = cast
+    with pytest.raises(TypeError):
+        prove_b_field_projector_is_a_locality_projector(PVector("Π", degree=2), U, om, h, g1, registry=reg)
+    with pytest.raises(TypeError):
+        prove_b_field_projector_is_a_locality_projector(Form("B_F", degree=2, bundle=Bundle("F")), U, om, h, g1, registry=reg)
+    for good in (Integer(0), Product(h, U), Sum(U, V)):
+        chain, _ = prove_b_field_projector_is_a_locality_projector(B, good, om, h, g1, registry=reg)
+        assert len(chain.steps) == 6
+    chain, _ = prove_linear_projector_is_a_locality_projector(Integer(0), U, om, V, et, h, g1, registry=reg)
+    assert len(chain.steps) == 6
+    with pytest.raises(ValueError):
+        prove_projector_differs_from_pr2_on_a_frame(frame(bundle=TangentBundle(dim=1)), dim=2, registry=reg)
+    chain, thm = prove_projector_differs_from_pr2_on_a_frame(frame(bundle=TangentBundle(dim=3)), dim=3, registry=reg)
+    assert thm.rhs == Integer(1)
