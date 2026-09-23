@@ -10,6 +10,14 @@ from jacopy.proof.diagnostics import (
 )
 # Register built-in rules by importing for side effects.
 from jacopy.proof import diagnostic_rules  # noqa: F401
+from jacopy.proof.ownership import (
+    AmbiguousOwnerError,
+    OwnerScope,
+    chain_owners,
+    check_owners,
+    owner_name,
+    owner_of,
+)
 from jacopy.proof.expansion import (
     MODES,
     ActOverSumOpDefinition,
@@ -53,6 +61,12 @@ from jacopy.proof.verifier import (
 )
 
 __all__ = [
+    "AmbiguousOwnerError",
+    "OwnerScope",
+    "chain_owners",
+    "check_owners",
+    "owner_name",
+    "owner_of",
     # core data types
     "ProofStep",
     "ProofChain",

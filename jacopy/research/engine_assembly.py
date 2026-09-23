@@ -279,6 +279,10 @@ def assemble_engine(
         NambuSharpLinearityDefinition,
     )
 
+    from jacopy.proof.ownership import check_owners
+
+    # two structures under one bivector name are ambiguous in the tree
+    check_owners(structures)
     scan = Scan(exprs)
     report: List[str] = [f"scanned {len(exprs)} expression(s): {scan}"]
     known = {s.pi: s for s in structures}

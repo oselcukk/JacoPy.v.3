@@ -172,6 +172,7 @@ class CoboundaryPairingDefinition(Definition):
         if not isinstance(alg, Algebroid):
             raise TypeError("CoboundaryPairingDefinition expects an Algebroid")
         self._alg = alg
+        self.owner = alg
         self.name = f"coboundary ({alg.name}): ⟨Df, u⟩ = ρ(u)(f)"
 
     def matches(self, expr: Expr) -> bool:
@@ -420,6 +421,7 @@ class CoboundaryLinearityDefinition(Definition):
                 "CoboundaryLinearityDefinition expects an Algebroid"
             )
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             f"coboundary linearity + Leibniz ({alg.name}): "

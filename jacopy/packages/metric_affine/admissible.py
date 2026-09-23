@@ -190,6 +190,7 @@ class ModifiedTorsionFreeDeclaration(Definition):
         bound: str = "s",
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._conn = conn
         self._fr = fr
         self._bound = bound
@@ -235,6 +236,7 @@ class CourantLocalityDefinition(Definition):
                 "layer"
             )
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"Courant locality ({alg.name}): "
             "L(Ω,u,v) = g(u,v)·g⁻¹(Ω)"
@@ -270,6 +272,7 @@ class MetricCompatibilityCollection(Definition):
 
     def __init__(self, alg: Algebroid, conn: Connection) -> None:
         self._alg = alg
+        self.owner = alg
         self._conn = conn
         self.name = (
             f"declared metric compatibility ({alg.name}, "

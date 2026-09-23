@@ -125,6 +125,7 @@ class RightLeibnizTheoremRule(Definition):
         registry: Optional[PropertyRegistry] = None,
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             "cite (7.2) right-Leibniz: [u, fv] = f[u,v] + ρ(u)f·v"
@@ -166,6 +167,7 @@ class LeftLeibnizTheoremRule(Definition):
         registry: Optional[PropertyRegistry] = None,
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             "cite left-Leibniz: [fu, v] = f[u,v] − ρ(v)f·u "
@@ -223,6 +225,7 @@ class SymPartCollectDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
 
     def _find_pair(self, expr: Sum):
         terms = list(expr.children)

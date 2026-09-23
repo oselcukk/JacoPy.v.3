@@ -285,6 +285,7 @@ class JacobiatorExpansionDefinition(Definition):
                 "JacobiatorExpansionDefinition expects an Algebroid"
             )
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"Jacobiator definition ({alg.name}): "
             "J(u,v,w) = [u,[v,w]] − [[u,v],w] − [v,[u,w]]"
@@ -394,6 +395,7 @@ class DerivatorExpansionDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"Derivator definition ({alg.name}): "
             "D_Φ(u,v) = Φ[u,v] − [Φu,v] − [u,Φv]"
@@ -515,6 +517,7 @@ class PredatorExpansionDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"Predator definition ({alg.name}): "
             "P_Φ(u,v) = Φ[u,v] − [Φu, Φv]_Lie"

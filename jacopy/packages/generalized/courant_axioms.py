@@ -141,6 +141,7 @@ class DLeibnizDefinition(Definition):
         registry: Optional[PropertyRegistry] = None,
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             f"(L) Leibniz rule for D ({alg.name}): "
@@ -189,6 +190,7 @@ class CourantInvarianceDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"[C5] invariance ({alg.name}): ρ(x)(y,z) = "
             "([x,y]+D(x,y), z) + (y, [x,z]+D(x,z))"
@@ -242,6 +244,7 @@ class C3IdentityDeclaration(Definition):
         if peel not in ("one", "all"):
             raise ValueError("peel must be 'one' or 'all'")
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self._peel = peel
         self.name = (
@@ -315,6 +318,7 @@ class SkewSwapCompositeDefinition(Definition):
         registry: Optional[PropertyRegistry] = None,
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             f"skew swap at composite slot ({alg.name}): "
@@ -357,6 +361,7 @@ class DPairingUnfoldDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"cite Prop 2.2 ({alg.name}): (Df, u) = ½ρ(u)(f)"
         )
@@ -395,6 +400,7 @@ class DDZeroDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"cite [C4] theorem ({alg.name}): (Da, Db) = 0, "
             "ρ(Da)(h) = 0"
@@ -442,6 +448,7 @@ class DNumericHomogeneityDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"ℝ-homogeneity of D ({alg.name}) — DERIVED from "
             "Prop 2.2 + non-degeneracy: D(c·h) = c·D(h), D(c) = 0"

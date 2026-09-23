@@ -34,6 +34,7 @@ class ProofStep:
         "_justification",
         "_children",
         "_provenance_tag",
+        "_owner",
     )
 
     #: Recognised provenance tags. ``None`` means the step carries no
@@ -57,6 +58,7 @@ class ProofStep:
         children: Optional[List["ProofStep"]] = None,
         *,
         provenance_tag: Optional[str] = None,
+        owner=None,
     ) -> None:
         if not isinstance(before, Expr):
             raise TypeError("ProofStep.before must be an Expr")
@@ -76,6 +78,8 @@ class ProofStep:
         self._rule = rule
         self._justification = justification
         self._provenance_tag = provenance_tag
+        # the structure whose rule fired (Faz 8 step 2c; None = structure-free)
+        self._owner = owner
         self._children: List[ProofStep] = []
         if children:
             for ch in children:
@@ -111,6 +115,12 @@ class ProofStep:
         whether to attach a sub-proof.
         """
         return self._provenance_tag
+
+    @property
+    def owner(self):
+        """The structure whose rule fired this step (``None`` when the
+        rule is structure-free or the step was built by hand)."""
+        return self._owner
 
     def add_child(self, step: "ProofStep") -> None:
         """Nest ``step`` under this one as a sub-proof."""

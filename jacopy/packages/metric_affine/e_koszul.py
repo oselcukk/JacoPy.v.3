@@ -127,6 +127,7 @@ class EKoszulDeclaration(Definition):
 
         self.anchor = EMetric
         self._alg = alg
+        self.owner = alg
         self._conn = conn
         self._fr = fr
         self.name = (
@@ -197,6 +198,7 @@ class AdmissibilityMetricPairCollection(Definition):
         bound: str = "s",
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._conn = conn
         self._fr = fr
         self._bound = bound
@@ -532,6 +534,7 @@ class NullLocalityDefinition(Definition):
 
         self.anchor = LocalityOperator
         self._alg = alg
+        self.owner = alg
         self.name = f"null locality ({alg.name}): L = 0"
 
     def matches(self, expr: Expr) -> bool:

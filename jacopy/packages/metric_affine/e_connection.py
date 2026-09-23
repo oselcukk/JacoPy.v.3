@@ -82,6 +82,7 @@ class EConnectionScalarActionDefinition(Definition):
                 "EConnectionScalarActionDefinition expects an Algebroid"
             )
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             f"E-connection scalar action ({alg.name}): ∇_u f = ρ(u)(f)"
@@ -107,6 +108,7 @@ class ETorsionExpansionDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"E-torsion definition ({alg.name}): "
             "T⁰(u,v) = ∇_u v − ∇_v u − [u,v]_E"
@@ -144,6 +146,7 @@ class ECurvatureExpansionDefinition(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"E-curvature definition ({alg.name}): "
             "R⁰(u,v)w = ∇_u∇_v w − ∇_v∇_u w − ∇_{[u,v]_E} w"

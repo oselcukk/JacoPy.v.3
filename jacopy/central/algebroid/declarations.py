@@ -73,6 +73,7 @@ class RightLeibnizDeclaration(Definition):
         self, alg: Algebroid, registry: Optional[PropertyRegistry] = None
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = f"right-Leibniz ({alg.name}): [u, fv] = ρ(u)(f)v + f[u,v]"
 
@@ -102,6 +103,7 @@ class LeftLeibnizDeclaration(Definition):
         self, alg: Algebroid, registry: Optional[PropertyRegistry] = None
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
         self.name = (
             f"left-Leibniz ({alg.name}): "
@@ -134,6 +136,7 @@ class AnchorMorphismDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = f"anchor morphism ({alg.name}): ρ([u,v]) = [ρ(u), ρ(v)]"
 
     def matches(self, expr: Expr) -> bool:
@@ -159,6 +162,7 @@ class JacobiDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = f"Leibniz-Jacobi ({alg.name}): J(u,v,w) = 0"
 
     def matches(self, expr: Expr) -> bool:
@@ -187,6 +191,7 @@ class AntisymmetryDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"antisymmetry ({alg.name}): [v,u] = −[u,v], [u,u] = 0"
         )
@@ -222,6 +227,7 @@ class MetricInvarianceDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"metric invariance ({alg.name}): "
             "ρ(u)(g(v,w)) = g([u,v],w) + g(v,[u,w])"
@@ -271,6 +277,7 @@ class SymmetricPartDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"symmetric part ({alg.name}): [u,v] + [v,u] = g⁻¹D g(u,v)"
         )

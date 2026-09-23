@@ -402,7 +402,8 @@ def prove_anchor_morphism(
 
     u_name, v_name = u._repr_inner(), v._repr_inner()
     theorem = Theorem(
-        name=f"anchor_morphism_{alg.name}_{u_name}_{v_name}",
+                owner=alg,
+name=f"anchor_morphism_{alg.name}_{u_name}_{v_name}",
         statement=(
             f"ρ([{u_name},{v_name}]) = [ρ({u_name}), ρ({v_name})] on "
             f"{alg.name} (every Leibniz algebroid is pre-Leibniz)"
@@ -663,7 +664,8 @@ def prove_right_leibniz_from_metric(
         f._repr_inner(),
     )
     theorem = Theorem(
-        name=f"right_leibniz_{alg.name}_{u_name}_{v_name}_{f_name}",
+                owner=alg,
+name=f"right_leibniz_{alg.name}_{u_name}_{v_name}_{f_name}",
         statement=(
             f"[{u_name}, {f_name}·{v_name}] = "
             f"ρ({u_name})({f_name})·{v_name} + "
@@ -744,7 +746,8 @@ def prove_left_leibniz_from_metric(
         engine=algebroid_engine(alg, registry=registry),
     )
     t_c2 = Theorem(
-        name=f"symmetric_part_swap_{alg.name}_{f._repr_inner()}"
+                owner=alg,
+name=f"symmetric_part_swap_{alg.name}_{f._repr_inner()}"
         f"_{u._repr_inner()}_{v._repr_inner()}",
         statement="[f·u, v] = −[v, f·u] + g⁻¹D g(f·u, v)",
         lhs=alg.bracket(fu, v),
@@ -811,7 +814,8 @@ def prove_left_leibniz_from_metric(
         f._repr_inner(),
     )
     theorem = Theorem(
-        name=f"left_leibniz_{alg.name}_{f_name}_{u_name}_{v_name}",
+                owner=alg,
+name=f"left_leibniz_{alg.name}_{f_name}_{u_name}_{v_name}",
         statement=(
             f"[{f_name}·{u_name}, {v_name}] = "
             f"{f_name}·[{u_name},{v_name}] − "
@@ -999,7 +1003,8 @@ def prove_locality_anchor_annihilation(
         f._repr_inner(),
     )
     theorem = Theorem(
-        name=(
+                owner=alg,
+name=(
             f"locality_anchor_annihilation_{alg.name}_{f_name}"
             f"_{u_name}_{v_name}"
         ),

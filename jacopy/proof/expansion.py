@@ -64,6 +64,13 @@ class Definition(ABC):
     #: keeps the rule in the always-consulted fallback list.
     anchor = None
 
+    #: The structure this rule was built for (Faz 8 step 2c): the
+    #: algebroid of a declared axiom, the theorem's owner for a cited
+    #: theorem, … ``None`` for structure-free rules. The engine refuses
+    #: two rules whose owners share a tree-visible name but differ
+    #: (:mod:`jacopy.proof.ownership`).
+    owner = None
+
     @abstractmethod
     def matches(self, expr: Expr) -> bool:
         """True when ``expr`` is an instance of this definition's LHS."""
@@ -179,6 +186,7 @@ class ExpansionEngine:
         "_mode",
         "_index",
         "_unanchored",
+        "_owners",
         "assembly_report",
     )
 
@@ -197,6 +205,9 @@ class ExpansionEngine:
         # engine so no side registry keeps discarded engines alive
         # (2026-09-09 audit, finding F4).
         self.assembly_report: List[str] = []
+        # tree-visible name -> owning structure of the registered rules
+        # (Faz 8 step 2c; see jacopy.proof.ownership)
+        self._owners: dict = {}
         # Dispatch index: Expr class -> [(registration order, rule)].
         # Rules without an anchor stay in the always-consulted fallback
         # list. Registration order is preserved across both so the
@@ -210,6 +221,14 @@ class ExpansionEngine:
         """Append ``definition`` to the rule list (and dispatch index)."""
         if not isinstance(definition, Definition):
             raise TypeError("ExpansionEngine.register expects a Definition")
+        owner = getattr(definition, "owner", None)
+        if owner is not None:
+            from jacopy.proof.ownership import check_owners
+
+            # refuses a second, different structure under a name already
+            # owned in this engine (ambiguous: the tree cannot tell them
+            # apart)
+            self._owners.update(check_owners([definition], bound=self._owners))
         order = len(self._definitions)
         self._definitions.append(definition)
         anchor = definition.anchor
@@ -223,6 +242,12 @@ class ExpansionEngine:
     @property
     def definitions(self) -> Tuple[Definition, ...]:
         return tuple(self._definitions)
+
+    @property
+    def owners(self) -> dict:
+        """``{tree-visible name: structure}`` for the owned rules of
+        this engine (Faz 8 step 2c)."""
+        return dict(self._owners)
 
     @property
     def mode(self) -> str:
@@ -256,6 +281,7 @@ class ExpansionEngine:
             rule=d.name,
             justification=f"apply {tag}: {d.name}",
             provenance_tag=tag,
+            owner=getattr(d, "owner", None),
         )
         if self._mode == "foundational" and d.is_theorem:
             builder = d.theorem_proof_builder()

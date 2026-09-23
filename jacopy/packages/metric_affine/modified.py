@@ -86,6 +86,7 @@ class CoframeRecombinationDefinition(Definition):
                 "CoframeRecombinationDefinition expects a Frame"
             )
         self._alg = alg
+        self.owner = alg
         self._frame = fr
         self._registry = registry
         self.name = (

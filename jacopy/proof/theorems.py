@@ -93,6 +93,9 @@ class Theorem:
     generality: str = "generic-function"
     from_axioms: Tuple[str, ...] = field(default_factory=tuple)
     notes: str = ""
+    #: The structure the theorem was proved in (Faz 8 step 2c);
+    #: ``None`` = unowned / legacy record (step 3b marks these).
+    owner: object = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name:
@@ -146,10 +149,22 @@ class TheoremBook:
             raise TypeError("TheoremBook.replace expects a Theorem")
         self._theorems[theorem.name] = theorem
 
-    def get(self, name: str) -> Theorem:
+    def get(self, name: str, *, owner=None) -> Theorem:
+        """The theorem ``name``; with ``owner`` given, only when the
+        record is owned by that structure (an owned record asked for
+        under a different same-named structure is refused, never
+        silently reused — Faz 8 step 2c)."""
         if name not in self._theorems:
             raise KeyError(f"no theorem named {name!r}; known: {self.names()}")
-        return self._theorems[name]
+        thm = self._theorems[name]
+        if owner is not None and thm.owner is not None and thm.owner is not owner and thm.owner != owner:
+            from jacopy.proof.ownership import AmbiguousOwnerError
+
+            raise AmbiguousOwnerError(
+                f"theorem {name!r} is owned by {thm.owner!r}, not by {owner!r}; "
+                "the same-named structures are different — transfer it explicitly"
+            )
+        return thm
 
     def names(self) -> Tuple[str, ...]:
         return tuple(self._theorems)
@@ -214,6 +229,7 @@ class TheoremDefinition(Definition):
         self._modulo_cache = None
         direction = "⇐" if self._reverse else "⇒"
         self.name = f"theorem {theorem.name} {direction}: {theorem.statement}"
+        self.owner = theorem.owner  # a citation is owned by the theorem's structure
         src = theorem.rhs if self._reverse else theorem.lhs
         self.anchor = type(src)
 

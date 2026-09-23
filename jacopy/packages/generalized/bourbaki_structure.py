@@ -292,6 +292,7 @@ class BLieREDerivationDefinition(Definition):
         registry: Optional[PropertyRegistry] = None,
     ) -> None:
         self._alg = alg
+        self.owner = alg
         self._registry = registry
 
     def matches(self, expr: Expr) -> bool:
@@ -332,6 +333,7 @@ class BourbakiInvarianceDeclaration(Definition):
 
     def __init__(self, alg: Algebroid) -> None:
         self._alg = alg
+        self.owner = alg
         self.name = (
             f"(7.8) invariance ({alg.name}): "
             "ℒ^R_ρu g(v,w) = g([u,v],w) + g(v,[u,w])"
