@@ -564,3 +564,61 @@ def test_probe_must_be_a_declared_scalar_and_default_avoids_form_names():
     assert reg.get(reserved, Graded).degree.as_int() == 2
     assert reg.get(probe, Graded).degree.as_int() == 0
     assert probe != reserved
+
+
+# ---- Faz 8 step 1 (library audit 2026-09-22) pins ------------------- #
+
+
+def test_extra_rules_are_never_deduplicated():
+    # 1d: two instances of one Definition class with different
+    # parameters are two rules
+    from jacopy.core.expr import Symbol
+    from jacopy.proof.expansion import Definition
+
+    class UserRule(Definition):
+        name = "user-supplied definition"
+
+        def __init__(self, lhs, rhs):
+            self.lhs, self.rhs = lhs, rhs
+
+        def matches(self, expr):
+            return expr == self.lhs
+
+        def rewrite(self, expr):
+            return self.rhs
+
+    a, b = Symbol("ua"), Symbol("ub")
+    eng = assemble_engine(a, b, registry=PropertyRegistry(), extra=(UserRule(a, Integer(1)), UserRule(b, Integer(2))))
+    assert eng.expand(a)[0] == Integer(1) and eng.expand(b)[0] == Integer(2)
+    assert sum("requested by the caller" in line for line in assembly_report(eng)) == 2
+
+
+def test_section_slots_reject_known_wrong_kinds_and_record_unknown():
+    # 1c: three-valued slot typing
+    from jacopy.core.expr import Symbol
+
+    T = SectionType.generalized_tangent()
+    (a,) = forms("ta", degree=1)
+    (X,) = vector_fields("tX")
+    with pytest.raises(TypeError):
+        T.section(a, X)  # 1-form in the vector slot
+    with pytest.raises(TypeError):
+        SectionType.exceptional().section(X, forms("t5", degree=5)[0], a)  # 5-form in the Λ² slot
+    ok = T.section(X, a)
+    assert ok.unverified_slots == ()
+    opaque = T.section(Symbol("s"), a)
+    assert opaque.unverified_slots == (0,)
+    assert T.section(Integer(0), Integer(0)).unverified_slots == ()
+    assert T.section(Sum(X, Neg(X)), a).unverified_slots == ()
+    # a scalar factor is only recognised when declared: an undeclared
+    # symbol times a 1-form is accepted but recorded as unverified
+    assert T.section(X, Product(Symbol("tf"), a)).unverified_slots == (1,)
+
+
+def test_bracket_rejects_a_wrong_output_type():
+    # 1b
+    T = SectionType.generalized_tangent()
+    wrong = SectionType.exceptional()
+    B = Bracket(T, lambda u, v: wrong.zero())
+    with pytest.raises(TypeError, match="must return a section"):
+        B(T.zero(), T.zero())

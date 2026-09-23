@@ -47,6 +47,82 @@ class Slot:
             return "C∞(M)"
         return f"Λ{_sup(self.degree)}T*M"
 
+    def accepts(self, expr: Expr) -> str:
+        """Three-valued type check of a component against this slot:
+        ``"valid"`` (known and matching), ``"invalid"`` (known and
+        wrong — a 1-form in a vector slot, a 5-form in the Λ² slot, a
+        vector in a form slot), ``"unknown"`` (an opaque expression
+        whose kind cannot be determined — accepted, but recorded as
+        unverified). Zero inhabits every slot. Only bilinear
+        combinations (sums, negations, scalar products) are looked
+        through; the decision never guesses (2026-09-22 library audit,
+        Faz 8 step 1c)."""
+        return _accepts(self, expr)
+
+
+def _component_kind(expr: Expr):
+    """``("vector", None)``, ``("form", k)``, ``("function", None)`` or
+    ``None`` when unknown."""
+    from jacopy.algebra.derivation import Derivation, degree_of
+    from jacopy.core.symbolic_degree import Degree
+
+    if expr == Integer(0):
+        return ("zero", None)
+    if isinstance(expr, (Neg,)):
+        return _component_kind(expr.arg)
+    if isinstance(expr, Sum):
+        kinds = {_component_kind(c) for c in expr.children}
+        kinds.discard(("zero", None))
+        if len(kinds) == 1:
+            return kinds.pop()
+        return None
+    if isinstance(expr, Product):
+        from jacopy.central.calculus.scalars import is_scalar_function
+
+        rest = [c for c in expr.children if not is_scalar_function(c, None)]
+        if len(rest) == 1:
+            return _component_kind(rest[0])
+        if not rest:
+            return ("function", None)
+        return None
+    lift = getattr(expr, "wedge_degree", None)
+    if isinstance(expr, Derivation) and isinstance(lift, Degree) and lift == Degree.const(1):
+        return ("vector", None)
+    from jacopy.central.objects.form import Form
+
+    if isinstance(expr, Form):
+        try:
+            return ("form", expr.degree.as_int())
+        except ValueError:
+            return None
+    deg = getattr(expr, "degree", None)
+    if isinstance(deg, Degree) and not isinstance(expr, Derivation):
+        try:
+            k = deg.as_int()
+        except ValueError:
+            return None
+        if k is None:
+            return None
+        return ("function", None) if k == 0 else ("form", k)
+    return None
+
+
+def _accepts(slot: "Slot", expr: Expr) -> str:
+    kind = _component_kind(expr)
+    if kind is None:
+        return "unknown"
+    if kind[0] == "zero":
+        return "valid"
+    if slot.kind == "vector":
+        return "valid" if kind[0] == "vector" else "invalid"
+    if slot.kind == "function":
+        return "valid" if kind[0] == "function" else "invalid"
+    if kind[0] != "form":
+        return "invalid"
+    if kind[1] is None:
+        return "unknown"
+    return "valid" if kind[1] == slot.degree else "invalid"
+
 
 def _sup(n: int) -> str:
     return "".join("⁰¹²³⁴⁵⁶⁷⁸⁹"[int(c)] for c in str(n))
@@ -106,7 +182,7 @@ class SectionType:
 class GeneralizedSection:
     """``U ⊕ ω₂ ⊕ ω₅`` — a section of ``E`` with one ``Expr`` per slot."""
 
-    __slots__ = ("_type", "_components")
+    __slots__ = ("_type", "_components", "_unverified")
 
     def __init__(self, type_: SectionType, *components: Expr) -> None:
         if not isinstance(type_, SectionType):
@@ -116,14 +192,30 @@ class GeneralizedSection:
                 f"{type_} has {len(type_)} slots, got "
                 f"{len(components)} components"
             )
-        for c in components:
+        unverified = []
+        for i, (slot, c) in enumerate(zip(type_.slots, components)):
             if not isinstance(c, Expr):
                 raise TypeError(
                     "section components must be Expr; got "
                     f"{type(c).__name__}"
                 )
+            verdict = slot.accepts(c)
+            if verdict == "invalid":
+                raise TypeError(
+                    f"component {i} ({c._repr_inner()}) does not fit the "
+                    f"{slot.label} slot of {type_}"
+                )
+            if verdict == "unknown":
+                unverified.append(i)
         self._type = type_
         self._components = tuple(components)
+        self._unverified = tuple(unverified)
+
+    @property
+    def unverified_slots(self) -> Tuple[int, ...]:
+        """Positions whose component's kind could not be determined
+        (accepted, not certified — see :meth:`Slot.accepts`)."""
+        return self._unverified
 
     @property
     def type(self) -> SectionType:

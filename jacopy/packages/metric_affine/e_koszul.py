@@ -730,12 +730,32 @@ def prove_fundamental_theorem_components(
     )
     for s in leg1:
         step1.add_child(s)
+    # the second step rewrites the Koszul components INSIDE the whole
+    # right-hand side, so the chain stays connected (step1.after ==
+    # step2.before) and its final expression keeps the Q/⁰T corrections
+    # (2026-09-23 audit, F4: two disconnected identities read as one)
+    rhs_expanded = rhs.substitute_atom(k_lhs, k_rhs) if hasattr(rhs, "substitute_atom") else _replace(rhs, k_lhs, k_rhs)
+    if rhs_expanded == rhs:
+        rhs_expanded = _replace(rhs, k_lhs, k_rhs)
     step2 = ProofStep(
-        k_lhs,
-        k_rhs,
-        rule="E-Koszul components at L = 0 (3.37): Γ(K∇)_{dbc} = ½[ρ(X)g + lowered γ terms]",
-        justification="declared E-Koszul connection; engine normal form",
+        rhs,
+        rhs_expanded,
+        rule="E-Koszul components at L = 0 (3.37) substituted: Γ(K∇)_{dbc} = ½[ρ(X)g + lowered γ terms]",
+        justification="declared E-Koszul connection; engine normal form of the component",
     )
     for s in leg2:
         step2.add_child(s)
     return ProofChain([step1, step2])
+
+
+def _replace(expr: Expr, target: Expr, value: Expr) -> Expr:
+    """Structural replacement of ``target`` by ``value`` (children walk)."""
+    if expr == target:
+        return value
+    kids = getattr(expr, "children", ())
+    if not kids:
+        return expr
+    new_kids = tuple(_replace(k, target, value) for k in kids)
+    if new_kids == tuple(kids):
+        return expr
+    return expr._rebuild(new_kids)

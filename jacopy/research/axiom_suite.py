@@ -74,6 +74,12 @@ class Bracket:
         out = self._fn(e1, e2)
         if not isinstance(out, GeneralizedSection):
             out = GeneralizedSection(self._type, *out)
+        elif out.type != self._type:
+            # the user's function returned a section of another bundle
+            # (2026-09-22 library audit, Faz 8 step 1b)
+            raise TypeError(
+                f"{self.name} must return a section of {self._type}, got {out.type}"
+            )
         return out
 
     @classmethod

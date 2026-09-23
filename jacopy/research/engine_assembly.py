@@ -395,7 +395,13 @@ def assemble_engine(
     if "lie_bracket" in fam:
         add(LieBracketLeibnizDefinition(registry), "Lie brackets of vector fields present")
     for rule in extra:
-        add(rule, "requested by the caller")
+        # caller-supplied rules are NEVER deduplicated: two instances
+        # of one Definition class with different parameters are two
+        # rules (2026-09-22 library audit — the class-keyed `add`
+        # silently dropped the second); the display name is not an
+        # identity
+        eng.register(rule)
+        report.append(f"+ {rule.name}  [requested by the caller]")
     eng.assembly_report = report
     return eng
 

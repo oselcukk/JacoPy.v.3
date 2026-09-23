@@ -128,7 +128,10 @@ from jacopy.packages.generalized.exceptional_double import (
 )
 from jacopy.packages.generalized.exact_locality_projector import (
     b_field_projector,
+    linear_projector,
     prove_b_field_projector_is_a_locality_projector,
+    prove_linear_projector_is_a_locality_projector,
+    prove_projector_differs_from_pr2_on_a_frame,
     prove_projector_fixes_locally_exact_forms,
 )
 from jacopy.packages.generalized.dialect_bridge import (
@@ -243,6 +246,9 @@ __all__ = [
     "prove_koszul_dialects_agree",
     "b_field_projector",
     "prove_b_field_projector_is_a_locality_projector",
+    "linear_projector",
+    "prove_linear_projector_is_a_locality_projector",
+    "prove_projector_differs_from_pr2_on_a_frame",
     "prove_projector_fixes_locally_exact_forms",
     "prove_theta_form_jacobi_by_citation",
     "prove_boxtimes_components_are_413",
