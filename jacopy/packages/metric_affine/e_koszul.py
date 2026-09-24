@@ -189,6 +189,8 @@ class AdmissibilityMetricPairCollection(Definition):
     metric slots). Collection-only direction, same cycle
     rationale."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = Sum
 
     def __init__(
@@ -530,6 +532,8 @@ class NullLocalityDefinition(Definition):
     (``[L] = [0]``, e.g. any almost-Lie algebroid [MC Prop 3.10]).
     The setting of the generalized fundamental theorem
     [MC Thm 3.2]."""
+
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
 
     def __init__(self, alg: Algebroid) -> None:
         from jacopy.central.algebroid.context import LocalityOperator

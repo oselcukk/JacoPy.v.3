@@ -148,6 +148,8 @@ class ProjectorAbsorbsExactFormsDefinition(Definition):
     ``C(dg) → dg`` for a function ``g``. DECLARED (it is the defining
     property of a locality projector, not derivable)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = EndoForm
 
     def __init__(self, map_name: str, registry: Optional[PropertyRegistry] = None) -> None:

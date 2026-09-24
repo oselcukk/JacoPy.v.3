@@ -58,7 +58,7 @@ from jacopy.core.expr import (
 )
 from jacopy.core.registry import PropertyRegistry
 from jacopy.proof.chain import ProofChain
-from jacopy.proof.expansion import Definition
+from jacopy.proof.expansion import Definition, ExplicitAssumption
 from jacopy.proof.step import ProofStep
 from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
@@ -495,6 +495,37 @@ def lichnerowicz_calculus(N: NambuPoissonStructure, registry=None):
     )
 
 
+class RFluxClosureDeclaration(Definition):
+    """``(d_θR)(…) → 0`` — the DECLARED closure of the R-flux
+    (Watamura §3, ``d_θR = 0``): every evaluation of ``d_θ R`` on
+    covector slots vanishes. An opt-in assumption owned by ``N``; its
+    key ``(class, N, R)`` is what a citing engine must register again
+    (audit dc44f79 F2)."""
+
+    role = "assumption"
+
+    def __init__(self, N: NambuPoissonStructure, R: Expr, registry=None) -> None:
+        from jacopy.core.multi_eval import MultiEval
+
+        self._N, self._R = N, R
+        self._head = lichnerowicz_d(N, R, registry)
+        self.owner = N
+        self.anchor = MultiEval
+        self.name = f"declared closure d_θR = 0 ({N.pi._repr_inner()}, R = {R._repr_inner()})"
+
+    @property
+    def identity(self):
+        return ("RFluxClosureDeclaration", self._N.pi._repr_inner(), self._R)
+
+    def matches(self, expr: Expr) -> bool:
+        from jacopy.core.multi_eval import MultiEval
+
+        return isinstance(expr, MultiEval) and expr.head == self._head
+
+    def rewrite(self, expr: Expr) -> Expr:
+        return Integer(0)
+
+
 def lichnerowicz_d(N: NambuPoissonStructure, R: Expr, registry=None) -> Expr:
     """``d_θ R`` — the Lichnerowicz–Poisson differential of a
     multivector (the intrinsic ``d`` of :func:`lichnerowicz_calculus`)."""
@@ -794,6 +825,10 @@ def prove_r_twisted_jacobi(
         assumptions = ("declared Poisson condition ([C'1] CITED)", "declared closure d_θR = 0")
         cite = " (cited library theorem: prove_theta_jacobi — taken as an assumption here)"
         c1_tag, c1_role = "axiom", "assumption"
+        # the licensing rules of the two [C'1] instance assumptions: explicit
+        # instance hypotheses owned by N (a citing engine registers the same)
+        c1_key_vec = ExplicitAssumption(j0_vec, owner=N, name=assumptions[0] + " — vector component").key
+        c1_key_form = ExplicitAssumption(j0_form, owner=N, name=assumptions[0] + " — form component").key
     else:
         chain_t, thm_t = prove_theta_jacobi(
             N, U, omega, V, eta, W, zeta, h, X, registry=registry
@@ -802,6 +837,9 @@ def prove_r_twisted_jacobi(
         assumptions = ("declared Poisson condition ([C'1] proven)", "declared closure d_θR = 0")
         cite = " (proven: prove_theta_jacobi, steps attached)"
         c1_tag, c1_role = "theorem", "theorem"
+        c1_key_vec = c1_key_form = None
+    closure = RFluxClosureDeclaration(N, R, registry)  # the licensing rule of the closure step
+    assert closure.matches(dtheta)
     steps = [
         ProofStep(
             jr_vec, Sum(j0_vec, dtheta),
@@ -810,17 +848,17 @@ def prove_r_twisted_jacobi(
             children=[chain_d.steps[0]], provenance_tag="theorem",
         ),
         ProofStep(
-            dtheta, Integer(0),
+            dtheta, closure.rewrite(dtheta),
             rule="declared closure d_θR = 0 (instance at (ω,η,ζ,dh))",
             justification="axiom instance of the opt-in R-flux closure",
-            provenance_tag="axiom", owner=N, role="assumption",
+            provenance_tag="axiom", owner=N, role="assumption", key=closure.key,
         ),
         ProofStep(
             j0_vec, Integer(0),
             rule=assumptions[0] + ": [C'1] of (TM)₀ ⊕ (T*M)_θ, "
             "vector component on the probe" + cite,
             justification="cited" if c1_vec is None else "proven",
-            children=c1_vec, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t,
+            children=c1_vec, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t, key=c1_key_vec,
         ),
         ProofStep(
             jr_form, j0_form,
@@ -833,7 +871,7 @@ def prove_r_twisted_jacobi(
             rule=assumptions[0] + ": [C'1] of (TM)₀ ⊕ (T*M)_θ, "
             "form component (paired with every X)" + cite,
             justification="cited" if c1_form is None else "proven",
-            children=c1_form, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t,
+            children=c1_form, provenance_tag=c1_tag, owner=N, role=c1_role, cites=thm_t, key=c1_key_form,
         ),
     ]
     chain = ProofChain(steps)

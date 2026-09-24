@@ -455,6 +455,10 @@ def _theta_jacobi_instances(engine, N, forms3, vectors, h, registry):
             N.pi, *a, alternating=True, slot_kind="covector"
         )
 
+    from jacopy.packages.drinfeld.tilde_calculus import _fi_key
+
+    fi_key = _fi_key(engine, N)
+
     def inst(tag, S, rule, prov, lifts):
         chain = ProofChain(
             [
@@ -466,6 +470,7 @@ def _theta_jacobi_instances(engine, N, forms3, vectors, h, registry):
                     provenance_tag=prov,
                     owner=N,
                     role=("assumption" if prov == "axiom" else None),
+                    key=(fi_key if prov == "axiom" else None),
                 )
             ]
         )

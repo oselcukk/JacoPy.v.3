@@ -270,6 +270,8 @@ class MetricCompatibilityCollection(Definition):
     output body is a Product of bound factors, so the indexed-sum
     linearity split cannot undo it (no ping-pong)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = Sum
 
     def __init__(self, alg: Algebroid, conn: Connection) -> None:

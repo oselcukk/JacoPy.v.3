@@ -80,6 +80,29 @@ class Definition(ABC):
     #: role is kept as a LEGACY assumption, never dropped.
     role = "definition"
 
+    #: Explicitly-unverified citation (a TheoremBook record marked
+    #: ``unverified``): its steps are classified as legacy assumptions.
+    unverified = False
+
+    #: Structural IDENTITY of the rule (Faz 8 step 1d contract):
+    #: ``None`` by default — the rule is never deduplicated by identity
+    #: and its :attr:`key` falls back to ``(class name, display name)``.
+    #: A rule that gives one returns ``(class, structure identity,
+    #: mathematical parameters)``: two rules with equal identity are the
+    #: same rule (an explicit assumption instance, a declared axiom of
+    #: a structure with its parameters …).
+    identity = None
+
+    @property
+    def key(self):
+        """The rule's structural key: :attr:`identity` when given, else
+        ``(class name, display name)``. Recorded on every fired
+        :class:`ProofStep` and on the resulting requirement records, so a
+        citation can check that the SAME licensing rule is registered in
+        the citing engine (Faz 8 step 3b, audit dc44f79 F2)."""
+        ident = self.identity
+        return ident if ident is not None else (type(self).__name__, self.name)
+
     @abstractmethod
     def matches(self, expr: Expr) -> bool:
         """True when ``expr`` is an instance of this definition's LHS."""
@@ -102,6 +125,52 @@ class Definition(ABC):
     def is_theorem(self) -> bool:
         """True when this definition carries a sub-proof builder."""
         return self.theorem_proof_builder() is not None
+
+
+class ExplicitAssumption(Definition):
+    """An EXPLICIT assumption instance: ``instance → target`` (default
+    ``0``), declared by the caller for one concrete expression. Role
+    ``assumption``; identity ``("ExplicitAssumption", owner name,
+    instance, target)`` so that the same declaration in two engines is
+    the same licensing rule — a theorem that used it is citable only
+    where it is registered again. The seed of ``assume_zero`` (Faz 8
+    step 5b): an exact-instance hypothesis, never a general identity."""
+
+    role = "assumption"
+    anchor = None
+
+    def __init__(self, instance: Expr, target: Optional[Expr] = None, *, owner=None, name: Optional[str] = None) -> None:
+        if not isinstance(instance, Expr):
+            raise TypeError("ExplicitAssumption expects an Expr instance")
+        from jacopy.core.expr import Integer as _Int
+
+        self._instance = instance
+        self._target = target if target is not None else _Int(0)
+        if not isinstance(self._target, Expr):
+            raise TypeError("ExplicitAssumption target must be an Expr")
+        self.owner = owner
+        self.anchor = type(instance)
+        self.name = name or f"explicit assumption: {instance._repr_inner()} = {self._target._repr_inner()}"
+
+    @property
+    def instance(self) -> Expr:
+        return self._instance
+
+    @property
+    def target(self) -> Expr:
+        return self._target
+
+    @property
+    def identity(self):
+        from jacopy.proof.ownership import owner_name
+
+        return ("ExplicitAssumption", owner_name(self.owner) if self.owner is not None else None, self._instance, self._target)
+
+    def matches(self, expr: Expr) -> bool:
+        return expr == self._instance and expr != self._target
+
+    def rewrite(self, expr: Expr) -> Expr:
+        return self._target
 
 
 # --------------------------------------------------------------------- #
@@ -169,6 +238,15 @@ D_SQUARED_CLASSIFICATIONS = ("axiom", "theorem")
 MODES = ("efficient", "foundational")
 
 
+def _step_role(d: Definition, tag: str) -> str:
+    role = getattr(d, "role", None)
+    if role == "assumption":
+        return "assumption"
+    if getattr(d, "unverified", False):
+        return "unverified-citation"
+    return "theorem" if tag == "theorem" else role
+
+
 class ExpansionEngine:
     """Apply registered :class:`Definition` rules bottom-up to fix-point.
 
@@ -196,6 +274,7 @@ class ExpansionEngine:
         "_index",
         "_unanchored",
         "_owners",
+        "_version",
         "assembly_report",
     )
 
@@ -217,6 +296,9 @@ class ExpansionEngine:
         # tree-visible name -> owning structure of the registered rules
         # (Faz 8 step 2c; see jacopy.proof.ownership)
         self._owners: dict = {}
+        # bumped on every registration: bound citations re-check their
+        # verdict when it changes (audit dc44f79 F4)
+        self._version = 0
         # Dispatch index: Expr class -> [(registration order, rule)].
         # Rules without an anchor stay in the always-consulted fallback
         # list. Registration order is preserved across both so the
@@ -251,6 +333,7 @@ class ExpansionEngine:
             self._owners = check_owners([*self._owners.values(), definition])
         order = len(self._definitions)
         self._definitions.append(definition)
+        self._version += 1
         anchor = definition.anchor
         if anchor is None:
             self._unanchored.append((order, definition))
@@ -262,6 +345,11 @@ class ExpansionEngine:
     @property
     def definitions(self) -> Tuple[Definition, ...]:
         return tuple(self._definitions)
+
+    @property
+    def version(self) -> int:
+        """Registration counter (changes whenever a rule is added)."""
+        return self._version
 
     @property
     def owners(self) -> dict:
@@ -302,8 +390,12 @@ class ExpansionEngine:
             justification=f"apply {tag}: {d.name}",
             provenance_tag=tag,
             owner=getattr(d, "owner", None),
-            role=("theorem" if tag == "theorem" else getattr(d, "role", None)),
+            # an assumption stays an assumption even when theorem-tagged
+            # (a theorem-classified consequence of a declared axiom); an
+            # explicitly-unverified citation is marked as such
+            role=_step_role(d, tag),
             cites=(getattr(d, "theorem", None) if tag == "theorem" else None),
+            key=d.key,
         )
         if self._mode == "foundational" and d.is_theorem:
             builder = d.theorem_proof_builder()

@@ -31,6 +31,7 @@ from jacopy.proof.expansion import (
     ActOverSumOpDefinition,
     Definition,
     ExpansionEngine,
+    ExplicitAssumption,
     default_engine,
 )
 from jacopy.proof.recognizers import (
@@ -92,6 +93,7 @@ __all__ = [
     "register_rule",
     # expansion
     "Definition",
+    "ExplicitAssumption",
     "ExpansionEngine",
     "MODES",
     "default_engine",

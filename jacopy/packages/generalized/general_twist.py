@@ -44,8 +44,9 @@ from jacopy.core.expr import (
     Sum,
 )
 from jacopy.core.registry import PropertyRegistry
+from jacopy.central.algebroid.declarations import JacobiDeclaration
 from jacopy.proof.chain import ProofChain
-from jacopy.proof.expansion import Definition, ExpansionEngine
+from jacopy.proof.expansion import ExplicitAssumption, Definition, ExpansionEngine
 from jacopy.proof.step import ProofStep
 from jacopy.proof.strategies import ProofFailure
 from jacopy.proof.theorems import Theorem
@@ -301,6 +302,7 @@ def _cited_transport_theorem(
     notes,
     label,
     owner=None,
+    key=None,
 ) -> Tuple[ProofChain, Theorem]:
     """``target = 0`` in two honest legs: the structural identity
     ``target → instance`` followed by the cited declared-zero
@@ -321,6 +323,10 @@ def _cited_transport_theorem(
         provenance_tag="axiom",
         owner=owner,
         role="assumption",  # a DECLARED axiom of the algebroid (Faz 8 step 3b)
+        # the licensing rule's key: the algebroid's declaration when the
+        # caller names one, else the caller's EXPLICIT instance assumption
+        # (declare_r_axioms=True) — a citing engine must register the same
+        key=key if key is not None else ExplicitAssumption(instance, owner=owner, name=cite_rule).key,
     )
     chain = ProofChain([structural, cite])
     theorem = Theorem(
@@ -556,6 +562,7 @@ def prove_general_twist_jacobi(
         notes="PDF 13j general procedure",
         label=label,
         owner=alg,
+        key=JacobiDeclaration(alg).key,  # licensed by the declared Leibniz-Jacobi of the initial bracket
     )
 
 

@@ -61,6 +61,8 @@ class ConnectionFrameDecompositionDefinition(Definition):
     """``∇_{e_b} e_c → Σ_s Γ^s_{bc} e_s`` — completeness of the frame
     for the declared ``(∇, frame)`` pair (opt-in axiom)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = Act
 
     def __init__(self, conn: Connection, fr: Frame) -> None:
@@ -115,6 +117,8 @@ class BracketFrameDecompositionDefinition(Definition):
     """``[e_a, e_b] → Σ_s γ^s_{ab} e_s`` — completeness of the frame
     for the bracket (opt-in axiom; the summed counterpart of the 2.E
     coefficient extraction)."""
+
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
 
     anchor = LieBracketVF
 

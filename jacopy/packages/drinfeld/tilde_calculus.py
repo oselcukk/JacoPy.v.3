@@ -232,6 +232,8 @@ class FISharpPairingSwapDefinition(Definition):
     face of the FI itself (found 2026-08-05 via the twisted-FI
     consistency residual)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = NambuSharpVF
 
     def __init__(self, structure) -> None:
@@ -393,6 +395,17 @@ def _tilde_engine(N, registry, *, declare_fi: bool):
     return eng
 
 
+def _fi_key(engine, N):
+    """The key of the declared FI rule registered on ``engine`` for
+    ``N`` (the licensing rule of every FI instance step); ``None`` when
+    the FI is not declared there — the instance is then a legacy
+    record, not a verified assumption."""
+    for r in engine.definitions:
+        if isinstance(r, NambuMorphismDeclaration) and getattr(r, "owner", None) == N:
+            return r.key
+    return None
+
+
 def _cite_fi_instances(engine, N, omega, eta, W, h, registry):
     """Register DECLARED-FI instances in their composed-action face
     (the 6.B two-normal-form technique): the defect
@@ -412,6 +425,7 @@ def _cite_fi_instances(engine, N, omega, eta, W, h, registry):
     )
     from jacopy.packages.poisson.tilde import _normalized_by
 
+    fi_key = _fi_key(engine, N)
     book = TheoremBook()
     names = []
     Pw = N.sharp_vf(omega)
@@ -457,6 +471,7 @@ def _cite_fi_instances(engine, N, omega, eta, W, h, registry):
                                     provenance_tag="axiom",
                                     owner=N,
                                     role="assumption",
+                                    key=fi_key,
                                 )
                             ]
                         ),

@@ -211,6 +211,13 @@ class TheoremBook:
         """Register ``theorem``, overwriting an existing same-name entry."""
         if not isinstance(theorem, Theorem):
             raise TypeError("TheoremBook.replace expects a Theorem")
+        if theorem.legacy and not unverified:
+            # validate BEFORE touching the existing record (audit dc44f79 F6)
+            raise LegacyTheoremError(
+                f"theorem {theorem.name!r} has unverified requirements "
+                f"({'; '.join(theorem.unverified_reasons())}); replace(theorem, unverified=True) "
+                "records it as an explicit unverified assumption; the existing record is kept"
+            )
         self._theorems.pop(theorem.name, None)
         self._unverified.discard(theorem.name)
         self.add(theorem, unverified=unverified)
@@ -312,6 +319,7 @@ def check_citation(theorem: Theorem, engine, *, allow_legacy: bool = False) -> C
         )
     owners = dict(getattr(engine, "owners", {}) or {})
     rules = tuple(getattr(engine, "definitions", ()) or ())
+    keys = {getattr(r, "key", None) for r in rules if getattr(r, "role", None) == "assumption"}
     for a in theorem.requires:
         kind = getattr(a, "kind", None)
         if kind not in ("declared", "structure"):
@@ -323,16 +331,27 @@ def check_citation(theorem: Theorem, engine, *, allow_legacy: bool = False) -> C
             if have is None:
                 reasons.append(f"requires {a.name} of {owner!r}, but this engine has no structure named {name!r}")
                 missing.append(a)
-            elif not is_substructure(owner, have):
+                continue
+            if not is_substructure(owner, have):
                 reasons.append(
                     f"requires {a.name} of {owner!r}; the engine's {name!r} is {have!r}"
                     + (f" with declarations {sorted(have.declarations)}" if getattr(have, "declarations", None) is not None else "")
                     + " — the right name on a different or weaker structure does not satisfy it"
                 )
                 missing.append(a)
-        elif kind == "declared":
-            if not any(getattr(r, "role", None) == "assumption" and r.name == a.name for r in rules):
-                reasons.append(f"requires the declared rule {a.name!r}, which this engine does not register")
+                continue
+        if kind == "declared":
+            # the owner is necessary, not sufficient: the SAME licensing
+            # rule (its structural key — class, structure, parameters such
+            # as a connection or a frame) must be registered here
+            # (audit dc44f79 F2)
+            rkey = getattr(a, "key", None)
+            if rkey is None or rkey not in keys:
+                reasons.append(
+                    f"requires the declared rule {a.name!r}"
+                    + (f" of {owner!r}" if owner is not None else "")
+                    + ", which this engine does not register (the structure alone does not license it)"
+                )
                 missing.append(a)
     return CitationCheck(ok=not reasons, reasons=tuple(reasons), legacy=legacy, missing=tuple(missing))
 
@@ -369,6 +388,7 @@ class TheoremDefinition(Definition):
         modulo=None,
         modulo_max_steps: int = 4096,
         allow_legacy: bool = False,
+        unverified: bool = False,
     ) -> None:
         if not isinstance(theorem, Theorem):
             raise TypeError("TheoremDefinition expects a Theorem")
@@ -378,6 +398,10 @@ class TheoremDefinition(Definition):
         self._modulo_max_steps = modulo_max_steps
         self._modulo_cache = None
         self._allow_legacy = bool(allow_legacy)
+        # the record was taken from a TheoremBook under its explicit
+        # ``unverified`` flag: the citation is a legacy assumption of the
+        # citing proof, whatever the record's own requirements say
+        self.unverified = bool(unverified)
         # citation check (Faz 8 step 3b): None = not bound to an engine
         # yet — only the legacy rule applies; a bound copy carries the
         # engine's verdict
@@ -388,6 +412,8 @@ class TheoremDefinition(Definition):
         self.name = f"theorem {theorem.name} {direction}: {theorem.statement}"
         if theorem.legacy:
             self.name += "  [LEGACY: unverified requirements]"
+        elif self.unverified:
+            self.name += "  [UNVERIFIED: recorded as an assumption]"
         self.owner = theorem.owner  # a citation is owned by the theorem's structure
         src = theorem.rhs if self._reverse else theorem.lhs
         self.anchor = type(src)
@@ -424,7 +450,7 @@ class TheoremDefinition(Definition):
         engine's current owners, not the registration moment."""
         engine = self._engine
         owners = getattr(engine, "owners", {}) or {}
-        key = tuple((n, id(o)) for n, o in owners.items())
+        key = (getattr(engine, "version", None), tuple((n, id(o)) for n, o in owners.items()))
         if self._check is not None and key == self._checked_against:
             return self._check
         self._check = check_citation(self._theorem, engine, allow_legacy=self._allow_legacy)
@@ -633,12 +659,14 @@ def cite(
     """
     for n in names:
         thm = book.get(n)
-        if thm.legacy and not allow_legacy:
+        unverified = not book.is_verified(n)
+        if (thm.legacy or unverified) and not allow_legacy:
+            why = "; ".join(thm.unverified_reasons()) if thm.legacy else "the book holds it as an explicit unverified assumption"
             raise LegacyTheoremError(
-                f"theorem {n!r} has unverified requirements ({'; '.join(thm.unverified_reasons())}); "
+                f"theorem {n!r} is not a verified record ({why}); "
                 "cite it explicitly with allow_legacy=True — the result will carry the marker"
             )
-        engine.register(TheoremDefinition(thm, reverse=reverse, allow_legacy=allow_legacy))
+        engine.register(TheoremDefinition(thm, reverse=reverse, allow_legacy=allow_legacy, unverified=unverified))
     return engine
 
 

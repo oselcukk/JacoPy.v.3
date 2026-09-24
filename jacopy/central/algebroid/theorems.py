@@ -549,6 +549,7 @@ def prove_right_leibniz_from_metric(
         provenance_tag="axiom",
         owner=c1.owner,
         role=c1.role,
+        key=c1.key,
     )
     n_a, steps_a = _normalize(after_c1, engine, registry)
     step_leg_a = ProofStep(
@@ -925,6 +926,7 @@ def prove_locality_anchor_annihilation(
         provenance_tag="axiom",
         owner=am.owner,
         role=am.role,
+        key=am.key,
     )
     n_a, steps_a = _normalize(Act(after_am, h), _engine(), registry)
     step_leg_a = ProofStep(

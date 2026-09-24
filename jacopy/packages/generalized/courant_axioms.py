@@ -133,6 +133,8 @@ class DLeibnizDefinition(Definition):
     assumption budget exactly.
     """
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = CourantD
 
     def __init__(
@@ -313,6 +315,8 @@ class SkewSwapCompositeDefinition(Definition):
     2.1(i)) can open the result. Same axiom, different site — the
     sign rule holds for ALL sections.
     """
+
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
 
     anchor = AlgebroidBracket
 

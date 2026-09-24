@@ -36,6 +36,8 @@ JACOPY_RUN_VERY_SLOW=1 .venv/bin/python -m pytest tests -q     # the ~14 min rot
 
 CI runs the `JACOPY_RUN_SLOW=1` set in the `slow` job on the weekly
 schedule and on a manual `workflow_dispatch` with `slow = true`.
+The `JACOPY_RUN_VERY_SLOW=1` closure (about fourteen minutes) is NOT
+run by CI; run it locally before a release.
 
 ## 3. Notebook smoke run
 

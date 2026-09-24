@@ -584,6 +584,8 @@ class MetricCompatibilityDefinition(Definition):
     ``X(g(Y,Z)) → g(∇_X Y, Z) + g(Y, ∇_X Z)`` for the declared
     ``(∇, g)`` pair (the tangent analogue of the algebroid C1)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = Act
 
     def __init__(self, conn: Connection, g: Metric) -> None:
@@ -620,6 +622,8 @@ class TorsionFreeDefinition(Definition):
     """Declared ``T(∇) = 0``:
     ``[X, Y] → ∇_X Y − ∇_Y X`` (the bracket expressed through the
     declared torsion-free connection)."""
+
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
 
     anchor = LieBracketVF
 

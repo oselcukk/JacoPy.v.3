@@ -37,6 +37,7 @@ class ProofStep:
         "_owner",
         "_role",
         "_cites",
+        "_key",
     )
 
     #: Recognised provenance tags. ``None`` means the step carries no
@@ -63,6 +64,7 @@ class ProofStep:
         owner=None,
         role: Optional[str] = None,
         cites=None,
+        key=None,
     ) -> None:
         if not isinstance(before, Expr):
             raise TypeError("ProofStep.before must be an Expr")
@@ -90,6 +92,9 @@ class ProofStep:
         # the cited Theorem record when this step is a citation (Faz 8
         # step 3b): its requirements propagate to the citing proof
         self._cites = cites
+        # the structural key of the licensing rule (Definition.key); an
+        # assumption step without one cannot be located in another engine
+        self._key = key
         self._children: List[ProofStep] = []
         if children:
             for ch in children:
@@ -144,6 +149,12 @@ class ProofStep:
         """The cited :class:`~jacopy.proof.theorems.Theorem` when this
         step is a theorem citation, else ``None``."""
         return self._cites
+
+    @property
+    def key(self):
+        """Structural key of the rule that fired (``Definition.key``);
+        ``None`` for a hand-built step."""
+        return self._key
 
     def add_child(self, step: "ProofStep") -> None:
         """Nest ``step`` under this one as a sub-proof."""

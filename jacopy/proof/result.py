@@ -90,6 +90,10 @@ class Assumption:
     owner: object = field(default=None, compare=False)
     instances: int = field(default=0, compare=False)
     example: Optional[Expr] = field(default=None, compare=False)
+    #: structural key of the licensing rule (``Definition.key``); a
+    #: ``declared`` entry always has one — a citation checks that a rule
+    #: with the same key is registered in the citing engine
+    key: object = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if self.kind not in ASSUMPTION_KINDS:
@@ -185,23 +189,41 @@ def _classify(steps: Iterable[ProofStep], principal=None):
     collect(steps)
     canon = {id(o): _dominant(o, owners_seen) for o in owners_seen}
 
-    def bump(table, kind, name, owner, example=None):
+    def bump(table, kind, name, owner, example=None, rkey=None):
         owner = canon.get(id(owner), owner) if owner is not None else None
-        key = (kind, name, id(owner) if owner is not None else None)
+        key = (kind, name, id(owner) if owner is not None else None, _hashable(rkey))
         if key in table:
-            k, n, o, c, ex = table[key]
-            table[key] = (k, n, o, c + 1, ex)
+            k, n, o, c, ex, rk = table[key]
+            table[key] = (k, n, o, c + 1, ex, rk)
         else:
-            table[key] = (kind, name, owner, 1, example)
+            table[key] = (kind, name, owner, 1, example, rkey)
+
+    def declared_or_legacy(s, owner):
+        # a declared assumption must name its licensing rule (key); a
+        # hand-built assumption step without one cannot be located in
+        # another engine and stays a legacy record (audit dc44f79 F2)
+        rkey = getattr(s, "key", None)
+        if rkey is None:
+            bump(assumptions, "legacy", f"assumption instance without a licensing rule: {s.rule}", owner, s.before)
+        else:
+            bump(assumptions, "declared", s.rule, owner, s.before, rkey)
 
     def visit(seq):
         for s in seq:
             tag, role = s.provenance_tag, getattr(s, "role", None)
             owner = getattr(s, "owner", None)
-            if tag == "theorem":
+            if role == "assumption":
+                declared_or_legacy(s, owner)
+                if tag == "theorem":
+                    bump(provenance, "theorem", s.rule, owner)
+            elif tag == "theorem":
                 bump(provenance, "theorem", s.rule, owner)
                 cited = getattr(s, "cites", None)
-                if cited is not None:
+                if role == "unverified-citation":
+                    # a TheoremBook record cited under its explicit
+                    # ``unverified`` flag (audit dc44f79 F5)
+                    bump(assumptions, "legacy", f"unverified citation (record marked unverified): {s.rule}", owner, s.before)
+                elif cited is not None:
                     # TRANSITIVE requirements (Faz 8 step 3b): a verified
                     # citation contributes its own requirements; an
                     # unverified (legacy) one is itself a legacy assumption
@@ -210,11 +232,17 @@ def _classify(steps: Iterable[ProofStep], principal=None):
                     else:
                         for a in cited.requires:
                             if a.kind in ("declared", "legacy", "scope"):
-                                bump(assumptions, a.kind, a.name, a.owner, a.example)
+                                bump(assumptions, a.kind, a.name, a.owner, a.example, a.key)
+                elif getattr(s, "key", None) is None and not s.children:
+                    # a HAND-BUILT theorem claim with neither the cited object
+                    # nor an attached derivation: not verifiable here (audit
+                    # dc44f79 F1). A step fired by a registered theorem-
+                    # classified rule carries the rule's key: its derivation
+                    # is the rule's proof builder (foundational mode inlines
+                    # it) — provenance, not an assumption.
+                    bump(assumptions, "legacy", f"unverified citation: {s.rule}", owner, s.before)
             elif tag == "axiom":
-                if role == "assumption":
-                    bump(assumptions, "declared", s.rule, owner, s.before)
-                elif role == "definition":
+                if role == "definition":
                     bump(provenance, "definition", s.rule, owner)
                 else:
                     # the rule recorded no role: a hand-built or unmigrated
@@ -232,8 +260,8 @@ def _classify(steps: Iterable[ProofStep], principal=None):
             visit(kids)
 
     visit(steps)
-    req = [Assumption(k, n, o, c, ex) for (k, n, o, c, ex) in assumptions.values()]
-    prov = [Provenance(k, n, o, c) for (k, n, o, c, _) in provenance.values()]
+    req = [Assumption(k, n, o, c, ex, rk) for (k, n, o, c, ex, rk) in assumptions.values()]
+    prov = [Provenance(k, n, o, c) for (k, n, o, c, _, _) in provenance.values()]
     # the structures behind the declared axioms are assumptions too
     seen_owners: list = []
     for a in req:
@@ -246,6 +274,14 @@ def _classify(steps: Iterable[ProofStep], principal=None):
     return tuple(req), tuple(prov)
 
 
+def _hashable(x):
+    try:
+        hash(x)
+        return x
+    except TypeError:
+        return repr(x)
+
+
 def _whole_step(before: Expr, after: Expr, local: ProofStep) -> ProofStep:
     """A whole-expression step carrying the engine's local step (a
     subterm rewrite) as its child; the same rule, tag, owner, role and
@@ -255,14 +291,18 @@ def _whole_step(before: Expr, after: Expr, local: ProofStep) -> ProofStep:
     return ProofStep(
         before, after, rule=local.rule, justification=local.justification, children=[local],
         provenance_tag=local.provenance_tag, owner=local.owner, role=getattr(local, "role", None),
-        cites=getattr(local, "cites", None),
+        cites=getattr(local, "cites", None), key=getattr(local, "key", None),
     )
 
 
 def _reversed_step(s: ProofStep) -> ProofStep:
+    """The step read backwards, with ALL its semantic metadata (owner,
+    role, citation, key, children) — reversing an equation must not
+    drop what it depends on (audit dc44f79 F1)."""
     return ProofStep(
         s.after, s.before, rule=s.rule, justification=(s.justification + " (reversed)").strip(),
         children=list(s.children), provenance_tag=s.provenance_tag, owner=s.owner, role=getattr(s, "role", None),
+        cites=getattr(s, "cites", None), key=getattr(s, "key", None),
     )
 
 
@@ -366,12 +406,16 @@ class ProofResult:
         owner=None,
         extra: Sequence[Assumption] = (),
         reason: str = "",
+        side_steps: Sequence[ProofStep] = (),
     ) -> "ProofResult":
         """Classify ``chain`` against ``goal``. The chain must start at
         ``goal.lhs``; its final expression decides ``CLOSED`` (equal to
         ``goal.rhs``) or ``RESIDUAL``; ``status="BUDGET"`` records an
-        exhausted budget. Assumptions the chain does not record
-        structurally are kept as ``legacy``, never ignored."""
+        exhausted budget. ``side_steps`` are a SEPARATE computation
+        (e.g. the right-hand side's normalization) whose assumptions and
+        provenance count but which is not part of the transcript.
+        Assumptions the chain does not record structurally are kept as
+        ``legacy``, never ignored."""
         if not isinstance(chain, ProofChain):
             raise TypeError("from_chain expects a ProofChain")
         if not isinstance(goal, Goal):
@@ -382,7 +426,7 @@ class ProofResult:
                 f"left-hand side {goal.lhs._repr_inner()}"
             )
         final = chain.final if len(chain) else goal.lhs
-        req, prov = _classify(chain.steps, principal=owner)
+        req, prov = _classify(tuple(chain.steps) + tuple(side_steps), principal=owner)
         req = req + tuple(extra)
         if generality == "instance":
             req = req + (Assumption("scope", "instance proof — the certificate is not generalized"),)
@@ -392,7 +436,7 @@ class ProofResult:
         residual = None if status == "CLOSED" else final
         return cls(
             goal=goal, status=status, requires=req, provenance=prov, chain=chain, residual=residual,
-            budget=Budget(len(chain), max_steps, exhausted), generality=generality, owner=owner, reason=reason,
+            budget=Budget(len(chain) + len(side_steps), max_steps, exhausted), generality=generality, owner=owner, reason=reason,
         )
 
     @classmethod
@@ -527,8 +571,14 @@ def prove(
     remaining = max(max_steps - len(lsteps), 1)
     right, rsteps, rexh = run(rhs, remaining)
     if rexh:
-        chain = ProofChain(lsteps + [_reversed_step(s) for s in reversed(rsteps)])
-        return ProofResult.from_chain(chain, Goal(lhs, chain.final if len(chain) else lhs), status="BUDGET", max_steps=max_steps, generality=generality, owner=owner)
+        # the right-hand side ran out of budget: the goal is unchanged, the
+        # left computation is the transcript, the right one a side
+        # computation whose assumptions still count (audit dc44f79 F7)
+        chain = ProofChain(lsteps)
+        return ProofResult.from_chain(
+            chain, goal, status="BUDGET", max_steps=max_steps, generality=generality, owner=owner,
+            side_steps=rsteps, reason=f"the right-hand side's normalization exhausted the budget at {right._repr_inner()}",
+        )
     if left == right:
         chain = ProofChain(lsteps + [_reversed_step(s) for s in reversed(rsteps)])
         return ProofResult.from_chain(chain, goal, status="CLOSED", max_steps=max_steps, generality=generality, owner=owner)
@@ -541,9 +591,14 @@ def prove(
         diff = simplify(diff, registry)
     steps = list(lsteps)
     if diff != left:
-        steps.append(ProofStep(left, diff, rule="residual: lhs − rhs", justification="normal forms differ; the difference is the residual"))
+        # the right-hand side's normalization is attached to the residual
+        # step so its assumptions and citations count (audit dc44f79 F1)
+        steps.append(ProofStep(left, diff, rule="residual: lhs − rhs", justification="normal forms differ; the difference is the residual", children=list(rsteps)))
+        rside = ()
+    else:
+        rside = tuple(rsteps)
     chain = ProofChain(steps)
-    return ProofResult.from_chain(chain, goal, status="RESIDUAL", max_steps=max_steps, generality=generality, owner=owner)
+    return ProofResult.from_chain(chain, goal, status="RESIDUAL", max_steps=max_steps, generality=generality, owner=owner, side_steps=rside)
 
 
 __all__ = [

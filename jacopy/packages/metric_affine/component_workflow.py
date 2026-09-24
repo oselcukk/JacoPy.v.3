@@ -320,6 +320,8 @@ class ConcreteDeltaDefinition(Definition):
     zeroing it under the sum falsifies ``Σ_s δ^s_0 = 1``
     (2026-09-09 audit, finding 3)."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = KroneckerDelta
 
     def __init__(self, data: ComponentInput) -> None:
@@ -351,6 +353,8 @@ class IndexedSumUnrollDefinition(Definition):
     when the input carries a dimension; substitution rules then see
     concrete labels only (bound labels are guarded out of the
     zero-defaults)."""
+
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
 
     def __init__(self, data: ComponentInput) -> None:
         from jacopy.core.indexed_sum import IndexedSum

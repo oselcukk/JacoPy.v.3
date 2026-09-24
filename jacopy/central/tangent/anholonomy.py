@@ -192,6 +192,8 @@ class HolonomicFrameDefinition(Definition):
     """``[e_a, e_b] → 0`` for a frame declared holonomic (coordinate
     frame): the opt-in ``γ = 0`` mode."""
 
+    role = "assumption"  # a declared / opt-in hypothesis, not a definition (audit dc44f79 F3)
+
     anchor = LieBracketVF
 
     def __init__(self, fr: Frame) -> None:
