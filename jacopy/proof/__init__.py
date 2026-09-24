@@ -18,6 +18,12 @@ from jacopy.proof.result import (
     Provenance,
     check_goal,
 )
+from jacopy.proof.normalize import (
+    NormalForm,
+    NormalizationBudgetExceeded,
+    normalize,
+    require_normal_form,
+)
 from jacopy.proof.ownership import (
     AmbiguousOwnerError,
     OwnerScope,
@@ -70,6 +76,10 @@ from jacopy.proof.verifier import (
 )
 
 __all__ = [
+    "NormalForm",
+    "NormalizationBudgetExceeded",
+    "normalize",
+    "require_normal_form",
     "Assumption",
     "Budget",
     "Goal",

@@ -118,21 +118,16 @@ def bridge_engine(N, registry: Optional[PropertyRegistry] = None):
 def _normalize(
     engine, expr: Expr, registry, *, max_steps: int = 60000
 ) -> Expr:
-    """Engine normal form with a larger per-pass expansion budget
-    than the default 1024 (a bridged 3-form Jacobiator needs a few
-    thousand definitional steps in its first pass — size, not a
-    cycle)."""
-    from jacopy.algorithms.product_rule import product_rule
-    from jacopy.algorithms.simplify import simplify
+    """Engine normal form with a LARGE expansion budget — the bridged
+    3-form Jacobiator needs a few thousand definitional steps in its
+    first pass (size, not a cycle). Faz 8 step 4b adapter over
+    :func:`jacopy.proof.normalize.normalize` (12 rounds, this budget)."""
+    from jacopy.proof.normalize import normalize
 
-    cur = expr
-    for _ in range(12):
-        expanded, _steps = engine.expand(cur, max_steps=max_steps)
-        reduced = simplify(product_rule(expanded, registry), registry)
-        if reduced == cur:
-            break
-        cur = reduced
-    return cur
+    nf = normalize(engine, expr, registry, rounds=12, max_steps=max_steps)
+    if nf.stopped_by == "steps":
+        raise RuntimeError(f"ExpansionEngine did not converge within {max_steps} steps; {nf.detail}")
+    return nf.expr
 
 
 def _poisson_jacobiator(pi, a: Expr, b: Expr, c: Expr, X: Expr) -> Expr:

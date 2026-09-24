@@ -375,18 +375,18 @@ def symplectic_engine(
 
 
 def _normalized_by(engine, seed: Expr, registry) -> Expr:
-    from jacopy.algorithms.product_rule import product_rule
-    from jacopy.algorithms.simplify import simplify
+    """Engine normal form: Faz 8 step 4b adapter over
+    :func:`jacopy.proof.normalize.normalize` with THIS helper's historical
+    defaults (10 rounds, 1024 steps per expansion pass). A step-budget
+    exhaustion raises as ``engine.expand`` used to; a round exhaustion
+    returns the last expression (pre-4b behaviour — callers that need
+    the guarantee use ``require_normal_form``)."""
+    from jacopy.proof.normalize import normalize
 
-    cur = seed
-    for _ in range(10):
-        expanded, _steps = engine.expand(cur)
-        after = product_rule(expanded, registry)
-        reduced = simplify(after, registry)
-        if reduced == cur:
-            break
-        cur = reduced
-    return cur
+    nf = normalize(engine, seed, registry, rounds=10, max_steps=1024)
+    if nf.stopped_by == "steps":
+        raise RuntimeError(f"ExpansionEngine did not converge within 1024 steps; {nf.detail}")
+    return nf.expr
 
 
 def _cite_closedness_instances(

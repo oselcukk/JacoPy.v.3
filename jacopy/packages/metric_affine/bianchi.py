@@ -154,22 +154,16 @@ def prove_bianchi_first(
 
 
 def _normalize(expr: Expr, engine, registry) -> Expr:
-    from jacopy.algorithms.product_rule import product_rule
-    from jacopy.algorithms.simplify import simplify
+    """Engine normal form, nested shape (8 outer rounds of: expansion +
+    product rule to their fixpoint in at most 64 inner rounds, then the
+    simplifier). Faz 8 step 4b adapter over
+    :func:`jacopy.proof.normalize.normalize`."""
+    from jacopy.proof.normalize import normalize
 
-    current = expr
-    for _ in range(8):
-        for _ in range(64):
-            expanded, _steps = engine.expand(current)
-            after = product_rule(expanded, registry)
-            if after == current:
-                break
-            current = after
-        reduced = simplify(current, registry)
-        if reduced == current:
-            break
-        current = reduced
-    return current
+    nf = normalize(engine, expr, registry, rounds=8, inner_rounds=64, max_steps=1024)
+    if nf.stopped_by == "steps":
+        raise RuntimeError(f"ExpansionEngine did not converge within 1024 steps; {nf.detail}")
+    return nf.expr
 
 
 def covariant_jacobi_theorems(

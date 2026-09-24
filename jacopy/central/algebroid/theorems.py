@@ -82,45 +82,23 @@ def _normalize(
 ) -> Tuple[Expr, List[ProofStep]]:
     """Drive ``expr`` to the engine's normal form, mirroring the
     :class:`ExpandAndSimplify` reduction loop (expand + product-rule
-    fix-point, then canonical simplification, repeated)."""
-    steps: List[ProofStep] = []
-    current = expr
-    for _outer in range(8):
-        for _ in range(64):
-            expanded, exp_steps = engine.expand(current)
-            steps.extend(exp_steps)
-            after = product_rule(expanded, registry)
-            if after != expanded:
-                steps.append(
-                    ProofStep(
-                        expanded,
-                        after,
-                        rule="product-rule",
-                        justification="graded Leibniz + linearity",
-                    )
-                )
-            if after == current:
-                break
-            current = after
-        else:
-            raise ProofFailure(
-                "anchor-morphism derivation: expansion did not converge "
-                f"on {expr._repr_inner()}"
-            )
-        reduced = simplify(current, registry)
-        if reduced != current:
-            steps.append(
-                ProofStep(
-                    current,
-                    reduced,
-                    rule="simplify",
-                    justification="canonical-form pipeline",
-                )
-            )
-        if reduced == current:
-            break
-        current = reduced
-    return current, steps
+    fix-point, then canonical simplification, repeated). Faz 8 step
+    4b: an adapter over :func:`jacopy.proof.normalize.normalize` with
+    this prover's defaults (8 outer rounds, 64 inner, 1024 steps);
+    an inner loop that does not settle raises :class:`ProofFailure`
+    as before, a step-budget exhaustion raises ``RuntimeError`` as
+    ``engine.expand`` did."""
+    from jacopy.proof.normalize import normalize
+
+    nf = normalize(engine, expr, registry, rounds=8, inner_rounds=64, max_steps=1024, record=True)
+    if nf.stopped_by == "steps":
+        raise RuntimeError(f"ExpansionEngine did not converge within 1024 steps; {nf.detail}")
+    if nf.stopped_by == "rounds" and nf.detail.startswith("inner loop"):
+        raise ProofFailure(
+            "anchor-morphism derivation: expansion did not converge "
+            f"on {expr._repr_inner()}"
+        )
+    return nf.expr, list(nf.chain)
 
 
 def _terms(expr: Expr) -> Tuple[Expr, ...]:

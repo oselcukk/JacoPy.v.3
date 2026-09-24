@@ -136,65 +136,24 @@ class ExpandAndSimplify(Strategy):
             return chain
 
         obstruction: Expr = Sum(lhs, Neg(rhs))
+        # Faz 8 step 4b: the common normalization contract with this
+        # strategy's shape (8 outer rounds, 64 inner, early stop at 0);
+        # the historical failure modes are preserved
+        from jacopy.proof.normalize import normalize
 
-        # The proof driver alternates two levels until nothing moves:
-        #
-        # * Inner fix-point: definition expansion + product_rule.
-        #   Definition expansion often lands shapes (``Act(d∘ι_X, arg)``,
-        #   ``Act(Sum(...), arg)``) that only unfold once product_rule
-        #   distributes Leibniz / linearity through, and that in turn
-        #   exposes fresh shapes for the definitions.
-        # * Outer round: canonical simplification. Simplify can produce
-        #   shapes the engine only matches post-collection — e.g. the
-        #   pairing-collection ``Σ sᵢ⟨ω,Vᵢ⟩ → ⟨ω, Σ sᵢVᵢ⟩`` builds the
-        #   Sum a cited bracket-identity theorem rewrites away — so
-        #   after a simplification that changed something the engine
-        #   gets another go.
-        current: Expr = obstruction
-        reduced: Expr = obstruction
-        for _outer in range(8):
-            for _ in range(64):
-                expanded, exp_steps = eng.expand(
-                    current, max_steps=max_steps
-                )
-                if exp_steps:
-                    chain.extend(exp_steps)
-                after_pr = product_rule(expanded, registry)
-                if after_pr != expanded:
-                    chain.append(
-                        ProofStep(
-                            expanded,
-                            after_pr,
-                            rule="product-rule",
-                            justification="graded Leibniz + linearity",
-                        )
-                    )
-                if after_pr == current:
-                    break
-                current = after_pr
-            else:
-                raise ProofFailure(
-                    "ExpandAndSimplify expand/product-rule loop did not "
-                    f"converge on {lhs._repr_inner()} == {rhs._repr_inner()}"
-                )
-
-            reduced = simplify(current, registry)
-            if reduced != current:
-                chain.append(
-                    ProofStep(
-                        current,
-                        reduced,
-                        rule="simplify",
-                        justification="canonical-form pipeline",
-                    )
-                )
-            if reduced == Integer(0):
-                break
-            if reduced == current:
-                # A full outer round changed nothing: stalled for good.
-                break
-            current = reduced
-
+        nf = normalize(
+            eng, obstruction, registry, rounds=8, inner_rounds=64, max_steps=max_steps,
+            record=True, stop_when=lambda e: e == Integer(0),
+        )
+        chain.extend(nf.chain)
+        if nf.stopped_by == "steps":
+            raise RuntimeError(f"ExpansionEngine did not converge within {max_steps} steps; {nf.detail}")
+        if nf.stopped_by == "rounds" and nf.detail.startswith("inner loop"):
+            raise ProofFailure(
+                "ExpandAndSimplify expand/product-rule loop did not "
+                f"converge on {lhs._repr_inner()} == {rhs._repr_inner()}"
+            )
+        reduced = nf.expr
         if reduced != Integer(0):
             # Attach a structural diagnostic report so callers (and the
             # agent driving the proof) can see why the pipeline stalled

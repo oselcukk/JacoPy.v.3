@@ -268,20 +268,14 @@ class AxiomSuite:
         """Engine normal form with this suite's expansion budget (the
         library default of 1024 rewrites is too small for the
         rotated exceptional 4-form checks; a true cycle still trips
-        the bound, just later)."""
-        from jacopy.algorithms.product_rule import product_rule
-        from jacopy.algorithms.simplify import simplify
+        the bound, just later). Faz 8 step 4b adapter over
+        :func:`jacopy.proof.normalize.normalize` (12 rounds)."""
+        from jacopy.proof.normalize import normalize
 
-        cur = node
-        for _ in range(12):
-            expanded, _steps = engine.expand(
-                cur, max_steps=self.expand_max_steps
-            )
-            reduced = simplify(product_rule(expanded, self.registry), self.registry)
-            if reduced == cur:
-                break
-            cur = reduced
-        return cur
+        nf = normalize(engine, node, self.registry, rounds=12, max_steps=self.expand_max_steps)
+        if nf.stopped_by == "steps":
+            raise RuntimeError(f"ExpansionEngine did not converge within {self.expand_max_steps} steps; {nf.detail}")
+        return nf.expr
 
     # ---- fresh evaluation symbols ---------------------------------- #
 
