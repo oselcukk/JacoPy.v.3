@@ -375,23 +375,27 @@ class NambuSharpPairingEvalDefinition(Definition):
         )
 
 
-def _tilde_engine(N, registry, *, declare_fi: bool):
+def _tilde_engine(N, registry, *, declare_fi: bool = False):
+    """The tilde-calculus engine of ``N``: the twist stack plus the
+    structure's own pairing and declared rules
+    (:meth:`~jacopy.packages.poisson.nambu.NambuPoissonStructure.engine_rules`).
+
+    ``declare_fi=True`` is the pre-4a spelling of "N declares the
+    fundamental identity": it is applied to ``N`` itself
+    (``N.with_declarations("fundamental-identity")``) — the flag is
+    never distributed to other structures. Prefer declaring on the
+    structure."""
     from jacopy.packages.drinfeld.twist import _twist_engine
 
+    if declare_fi and not N.declares("fundamental-identity"):
+        N = N.with_declarations("fundamental-identity")
     eng = _twist_engine(N, registry)
     eng.register(LieIotaCommutatorDefinition())
     eng.register(InteriorAnticommuteDefinition())
-    eng.register(NambuSharpPairingEvalDefinition(N, registry))
-    if declare_fi:
-        # the DECLARED fundamental identity is an assumption owned by N
-        # (Faz 8 step 3b): the engine then owns the name of N.pi, and FI
-        # instance theorems cite back against it
-        morph = NambuMorphismDeclaration(N)
-        morph.owner = N
-        swap = FISharpPairingSwapDefinition(N)
-        swap.owner = N
-        eng.register(morph)
-        eng.register(swap)
+    for rule in N.engine_rules(registry, phase="pairing"):
+        eng.register(rule)
+    for rule in N.engine_rules(registry, phase="declared"):
+        eng.register(rule)
     return eng
 
 
@@ -401,7 +405,8 @@ def _fi_key(engine, N):
     the FI is not declared there — the instance is then a legacy
     record, not a verified assumption."""
     for r in engine.definitions:
-        if isinstance(r, NambuMorphismDeclaration) and getattr(r, "owner", None) == N:
+        owner = getattr(r, "owner", None)
+        if isinstance(r, NambuMorphismDeclaration) and getattr(owner, "pi", None) == N.pi:
             return r.key
     return None
 

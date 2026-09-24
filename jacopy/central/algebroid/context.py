@@ -632,6 +632,43 @@ class Algebroid:
         """The ``E = TM, ρ = id, [·,·] = Lie`` reduction (PDF 8a)."""
         return isinstance(self._bundle, TangentBundle)
 
+    def engine_rules(self, registry=None, *, phase=None):
+        """The rules THIS algebroid contributes to an engine (Faz 8
+        step 4a), all owned by it: phase ``"declared"`` — the rules
+        licensed by its declarations; phase ``"coboundary"`` — the
+        coboundary pairing/linearity definitions; phase
+        ``"expansion"`` — the Jacobiator / derivator / predator
+        definitional expansions. Structure-free rules are the engine
+        builder's (:func:`~jacopy.central.algebroid.engine.algebroid_engine`)."""
+        from jacopy.central.algebroid.declarations import declaration_rules
+        from jacopy.central.algebroid.operators import (
+            DerivatorExpansionDefinition,
+            JacobiatorExpansionDefinition,
+            PredatorExpansionDefinition,
+        )
+        from jacopy.central.algebroid.rules import (
+            CoboundaryLinearityDefinition,
+            CoboundaryPairingDefinition,
+        )
+
+        groups = {
+            "declared": lambda: declaration_rules(self, registry),
+            "coboundary": lambda: [CoboundaryPairingDefinition(self), CoboundaryLinearityDefinition(self, registry)],
+            "expansion": lambda: [
+                JacobiatorExpansionDefinition(self),
+                DerivatorExpansionDefinition(self),
+                PredatorExpansionDefinition(self),
+            ],
+        }
+        if phase is not None and phase not in groups:
+            raise ValueError(f"unknown phase {phase!r}; known: {tuple(groups)}")
+        out = []
+        for ph in ([phase] if phase is not None else list(groups)):
+            for rule in groups[ph]():
+                rule.owner = self
+                out.append(rule)
+        return out
+
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, Algebroid)

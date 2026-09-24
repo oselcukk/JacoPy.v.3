@@ -99,8 +99,10 @@ def is_substructure(owner, of) -> bool:
     if d1 is None or d2 is None:
         return False
     return (
-        owner_name(owner) == owner_name(of)
+        type(owner) is type(of)  # a Poisson π and a Nambu Π of the same name are different structures
+        and owner_name(owner) == owner_name(of)
         and getattr(owner, "bundle", None) == getattr(of, "bundle", None)
+        and getattr(owner, "pi", None) == getattr(of, "pi", None)
         and set(d1) <= set(d2)
     )
 

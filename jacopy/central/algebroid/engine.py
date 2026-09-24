@@ -104,7 +104,7 @@ def algebroid_engine(
 
     return ExpansionEngine(
         [
-            *declaration_rules(alg, registry),
+            *alg.engine_rules(registry, phase="declared"),
             *projector_rules,
             ActOverSumOpDefinition(),
             LieBracketActionDefinition(),
@@ -121,17 +121,14 @@ def algebroid_engine(
             SlotZeroDefinition(),
             AnchorLinearityDefinition(registry),
             BracketBilinearityDefinition(),
-            CoboundaryPairingDefinition(alg),
-            CoboundaryLinearityDefinition(alg, registry),
+            *alg.engine_rules(registry, phase="coboundary"),
             LocalityMultilinearityDefinition(registry),
             MetricBilinearityDefinition(registry),
             MetricSymmetryDefinition(),
             MetricSharpEvaluationDefinition(),
             MetricSharpLinearityDefinition(registry),
             MappedSectionLinearityDefinition(registry),
-            JacobiatorExpansionDefinition(alg),
-            DerivatorExpansionDefinition(alg),
-            PredatorExpansionDefinition(alg),
+            *alg.engine_rules(registry, phase="expansion"),
         ],
         mode=mode,
     )

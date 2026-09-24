@@ -50,14 +50,26 @@ from jacopy.central.objects.multivector import PVector
 from jacopy.central.tangent.exterior import CARTAN_TM, d
 
 
+#: The declarable axioms of a Nambu-Poisson structure (Faz 8 step 4a):
+#: ``"fundamental-identity"`` — the Nambu fundamental identity (the
+#: Poisson condition for ``p = 1``): ``[Πω, Πη] = Π[ω, η]_Kos`` and its
+#: pairing-swap consequence. Nothing else is ever assumed.
+NAMBU_DECLARATIONS = ("fundamental-identity",)
+
+
 class NambuPoissonStructure:
     """``(M, Π)`` — a Nambu-Poisson structure of order ``p``
-    (``Π`` a ``(p+1)``-vector). The fundamental identity is the
-    DECLARED axiom (Phase 5.E.4); nothing here assumes it."""
+    (``Π`` a ``(p+1)``-vector). The fundamental identity is a DECLARED
+    axiom carried BY THE STRUCTURE (Faz 8 step 4a: ``declare=(…)`` /
+    :meth:`with_declarations`); a structure without it assumes
+    nothing. Two structures with the same ``Π`` and different
+    declarations are different owners (the weaker one is a
+    sub-structure of the stronger one, see
+    :func:`jacopy.proof.ownership.is_substructure`)."""
 
-    __slots__ = ("_pi", "_p")
+    __slots__ = ("_pi", "_p", "_declarations")
 
-    def __init__(self, pi: PVector) -> None:
+    def __init__(self, pi: PVector, *, declare=()) -> None:
         if not isinstance(pi, PVector):
             raise TypeError(
                 "NambuPoissonStructure requires a PVector"
@@ -70,6 +82,11 @@ class NambuPoissonStructure:
             )
         self._pi = pi
         self._p = order
+        decl = frozenset(declare)
+        unknown = sorted(decl - set(NAMBU_DECLARATIONS))
+        if unknown:
+            raise ValueError(f"unknown Nambu declaration(s) {unknown}; known: {NAMBU_DECLARATIONS}")
+        self._declarations = decl
 
     @property
     def pi(self) -> PVector:
@@ -80,29 +97,87 @@ class NambuPoissonStructure:
         """The form degree the bracket acts on."""
         return self._p
 
+    @property
+    def name(self) -> str:
+        """The tree-visible name of the structure (its multivector)."""
+        return self._pi._repr_inner()
+
+    @property
+    def declarations(self) -> frozenset:
+        return self._declarations
+
+    def declares(self, key: str) -> bool:
+        return key in self._declarations
+
+    def with_declarations(self, *declare: str) -> "NambuPoissonStructure":
+        """The same structure with additional declared axioms."""
+        return NambuPoissonStructure(self._pi, declare=tuple(self._declarations) + tuple(declare))
+
     def sharp_vf(self, omega: Expr) -> "NambuSharpVF":
         """``Πω`` — the induced vector field of a p-form."""
         return NambuSharpVF(self._pi, omega)
+
+    # ---- structure provider (Faz 8 step 4a) --------------------------- #
+
+    def engine_rules(self, registry=None, *, phase=None):
+        """The rules THIS structure contributes to an engine, each
+        owned by the structure and keyed by ``(class, Π)``:
+
+        * phase ``"sharp"`` — the definitional sharp rules (action,
+          linearity);
+        * phase ``"pairing"`` — the sharp pairing evaluation;
+        * phase ``"declared"`` — the fundamental-identity rules, ONLY
+          when the structure declares ``"fundamental-identity"``.
+
+        ``phase=None`` returns all three in that order. Structure-free
+        rules (the Cartan base, wedge/slot laws) are not the
+        structure's business — the engine builders add them once."""
+        from jacopy.packages.drinfeld.tilde_calculus import (
+            FISharpPairingSwapDefinition,
+            NambuMorphismDeclaration,
+            NambuSharpPairingEvalDefinition,
+        )
+
+        groups = {
+            "sharp": lambda: [NambuSharpActionDefinition(self, registry), NambuSharpLinearityDefinition(self, registry)],
+            "pairing": lambda: [NambuSharpPairingEvalDefinition(self, registry)],
+            "declared": lambda: (
+                [NambuMorphismDeclaration(self), FISharpPairingSwapDefinition(self)]
+                if self.declares("fundamental-identity") else []
+            ),
+        }
+        if phase is not None and phase not in groups:
+            raise ValueError(f"unknown phase {phase!r}; known: {tuple(groups)}")
+        out = []
+        for ph in ([phase] if phase is not None else list(groups)):
+            for rule in groups[ph]():
+                rule.owner = self
+                rule.identity = (type(rule).__name__, self.name)
+                out.append(rule)
+        return out
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, NambuPoissonStructure)
             and self._pi == other._pi
+            and self._declarations == other._declarations
         )
 
     def __hash__(self) -> int:
-        return hash(("nambu-structure", self._pi))
+        return hash(("nambu-structure", self._pi, self._declarations))
 
     def __repr__(self) -> str:
-        return f"NambuPoissonStructure({self._pi!r}, p={self._p})"
+        decl = f", declare={sorted(self._declarations)}" if self._declarations else ""
+        return f"NambuPoissonStructure({self._pi!r}, p={self._p}{decl})"
 
 
 def nambu_structure(
-    name: str = "Π", *, p: int = 2
+    name: str = "Π", *, p: int = 2, declare=()
 ) -> NambuPoissonStructure:
     """Create a Nambu-Poisson structure with a fresh
-    ``(p+1)``-vector."""
-    return NambuPoissonStructure(PVector(name, degree=p + 1))
+    ``(p+1)``-vector; ``declare=("fundamental-identity",)`` opts into
+    the fundamental identity as the structure's own assumption."""
+    return NambuPoissonStructure(PVector(name, degree=p + 1), declare=declare)
 
 
 class NambuSharpVF(Derivation):
@@ -307,8 +382,8 @@ def nambu_engine(
     )
 
     engine = tangent_engine(registry=registry)
-    engine.register(NambuSharpActionDefinition(N, registry))
-    engine.register(NambuSharpLinearityDefinition(N, registry))
+    for rule in N.engine_rules(registry, phase="sharp"):
+        engine.register(rule)
     engine.register(HeadScalarDefinition(registry))
     engine.register(MultiEvalArgLinearityDefinition(registry))
     engine.register(WedgeEvalDefinition(registry))

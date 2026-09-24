@@ -197,9 +197,9 @@ class PoissonStructure:
     (``poisson_engine(structures=(P,))``).
     """
 
-    __slots__ = ("_pi",)
+    __slots__ = ("_pi", "_declarations")
 
-    def __init__(self, pi: PVector) -> None:
+    def __init__(self, pi: PVector, *, declare=()) -> None:
         if not isinstance(pi, PVector):
             raise TypeError("PoissonStructure requires a PVector")
         if pi.degree != Degree.const(2):
@@ -207,10 +207,56 @@ class PoissonStructure:
                 "a Poisson structure needs a bivector (degree 2)"
             )
         self._pi = pi
+        decl = frozenset(declare)
+        unknown = sorted(decl - set(POISSON_DECLARATIONS))
+        if unknown:
+            raise ValueError(f"unknown Poisson declaration(s) {unknown}; known: {POISSON_DECLARATIONS}")
+        self._declarations = decl
 
     @property
     def pi(self) -> PVector:
         return self._pi
+
+    @property
+    def name(self) -> str:
+        """The tree-visible name of the structure (its bivector)."""
+        return self._pi._repr_inner()
+
+    @property
+    def declarations(self) -> frozenset:
+        return self._declarations
+
+    def declares(self, key: str) -> bool:
+        return key in self._declarations
+
+    def with_declarations(self, *declare: str) -> "PoissonStructure":
+        """The same structure with additional declared axioms."""
+        return PoissonStructure(self._pi, declare=tuple(self._declarations) + tuple(declare))
+
+    def engine_rules(self, registry=None, *, phase=None):
+        """The rules THIS structure contributes (Faz 8 step 4a), owned
+        by it and keyed by ``(class, π)``: phase ``"declared"`` — the
+        ``[π,π]_SN = 0`` declaration ONLY when ``"poisson"`` is
+        declared; phase ``"definitional"`` — bracket, Hamiltonian,
+        sharp evaluation and sharp action."""
+        groups = {
+            "declared": lambda: [PoissonSNDeclaration(self)] if self.declares("poisson") else [],
+            "definitional": lambda: [
+                PoissonBracketDefinition(self),
+                HamiltonianActionDefinition(self, registry),
+                SharpEvaluationDefinition(self),
+                SharpActionDefinition(self, registry),
+            ],
+        }
+        if phase is not None and phase not in groups:
+            raise ValueError(f"unknown phase {phase!r}; known: {tuple(groups)}")
+        out = []
+        for ph in ([phase] if phase is not None else list(groups)):
+            for rule in groups[ph]():
+                rule.owner = self
+                rule.identity = (type(rule).__name__, self.name)
+                out.append(rule)
+        return out
 
     def bracket(self, f: Expr, g: Expr) -> PoissonBracketValue:
         """``{f, g}``."""
@@ -231,19 +277,29 @@ class PoissonStructure:
 
     def __eq__(self, other: object) -> bool:
         return (
-            isinstance(other, PoissonStructure) and self._pi == other._pi
+            isinstance(other, PoissonStructure)
+            and self._pi == other._pi
+            and self._declarations == other._declarations
         )
 
     def __hash__(self) -> int:
-        return hash(("poisson-structure", self._pi))
+        return hash(("poisson-structure", self._pi, self._declarations))
 
     def __repr__(self) -> str:
-        return f"PoissonStructure({self._pi!r})"
+        decl = f", declare={sorted(self._declarations)}" if self._declarations else ""
+        return f"PoissonStructure({self._pi!r}{decl})"
 
 
-def poisson_structure(name: str = "π") -> PoissonStructure:
-    """Create a Poisson structure with a fresh bivector ``π``."""
-    return PoissonStructure(bivector(name))
+#: The declarable axioms of a Poisson structure (Faz 8 step 4a):
+#: ``"poisson"`` — the Poisson condition ``[π, π]_SN = 0``.
+POISSON_DECLARATIONS = ("poisson",)
+
+
+def poisson_structure(name: str = "π", *, declare=()) -> PoissonStructure:
+    """Create a Poisson structure with a fresh bivector ``π``;
+    ``declare=("poisson",)`` opts into ``[π,π]_SN = 0`` as the
+    structure's own assumption."""
+    return PoissonStructure(bivector(name), declare=declare)
 
 
 # --------------------------------------------------------------------- #
@@ -471,10 +527,16 @@ def poisson_engine(
     registry: Optional[PropertyRegistry] = None,
     mode: str = "efficient",
     structures=(),
+    declare_sn: bool = True,
 ) -> ExpansionEngine:
     """The tangent engine extended with the Poisson layer for the
-    given structures (definitional rules always; the ``[π,π]_SN = 0``
-    declaration for each structure passed — the opt-in axiom)."""
+    given structures: each structure contributes its own rules
+    (:meth:`PoissonStructure.engine_rules`). ``declare_sn=True`` (the
+    pre-4a default, kept for compatibility) treats every structure
+    passed as declaring ``"poisson"``; pass ``declare_sn=False`` and
+    declare on the structures themselves (``declare=("poisson",)``)
+    — the 4a contract: the flag is not distributed, each structure
+    carries its own assumptions."""
     from jacopy.central.tangent.engine import tangent_engine
 
     engine = tangent_engine(registry=registry, mode=mode)
@@ -485,11 +547,10 @@ def poisson_engine(
                 "poisson_engine structures must be PoissonStructure "
                 f"instances, got {P!r}"
             )
-        engine.register(PoissonSNDeclaration(P))
-        engine.register(PoissonBracketDefinition(P))
-        engine.register(HamiltonianActionDefinition(P, registry))
-        engine.register(SharpEvaluationDefinition(P))
-        engine.register(SharpActionDefinition(P, registry))
+        if declare_sn and not P.declares("poisson"):
+            P = P.with_declarations("poisson")
+        for rule in P.engine_rules(registry):
+            engine.register(rule)
     return engine
 
 

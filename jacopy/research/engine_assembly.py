@@ -286,6 +286,8 @@ def assemble_engine(
     scan = Scan(exprs)
     report: List[str] = [f"scanned {len(exprs)} expression(s): {scan}"]
     known = {s.pi: s for s in structures}
+    if len(known) != len(structures):
+        raise ValueError("assemble_engine: two structures share one multivector — pass each structure once")
     unknown = [p for p in scan.sharp_pis if p not in known]
     if unknown:
         raise ValueError(
@@ -294,30 +296,52 @@ def assemble_engine(
             "structures=(...) — the engine will not guess their rules"
         )
 
+    structures = list(structures)
+    if declare_fi and structures:
+        # pre-4a spelling: the flag meant "the FIRST structure declares
+        # the fundamental identity"; it is applied to that structure
+        # only and reported — never distributed (Faz 8 step 4a)
+        if not structures[0].declares("fundamental-identity"):
+            structures[0] = structures[0].with_declarations("fundamental-identity")
+        report.append(
+            "declare_fi=True is the pre-4a spelling: applied to the first structure "
+            f"{structures[0].name} only — declare on the structure instead"
+        )
     if structures:
         host = structures[0]
-        eng = _tilde_engine(host, registry, declare_fi=declare_fi)
+        eng = _tilde_engine(host, registry)
         report.append(
-            f"base: tilde-calculus engine hosted by {host.pi._repr_inner()} "
+            f"base: tilde-calculus engine hosted by {host.name} "
             f"(Cartan calculus + Koszul/tilde rules)"
             + (
                 " — WITH the DECLARED fundamental identity (Poisson condition)"
-                if declare_fi
+                if host.declares("fundamental-identity")
                 else " — no fundamental-identity declaration"
             )
         )
+        registered = {getattr(r, "key", None) for r in eng.definitions}
         for s in structures[1:]:
-            if not _has(eng, NambuSharpLinearityDefinition, s.pi):
-                eng.register(NambuSharpLinearityDefinition(s, registry))
-                report.append(
-                    f"+ linearity of the sharp map of {s.pi._repr_inner()}"
-                )
+            # every structure contributes ITS OWN rule set — definitional
+            # capabilities are symmetric, declared axioms are each
+            # structure's own (N₁ with the FI, N₂ without)
+            for rule in s.engine_rules(registry):
+                if rule.key in registered:
+                    continue
+                eng.register(rule)
+                registered.add(rule.key)
+                report.append(f"+ {rule.name}  [rules of {s.name}]")
+            report.append(
+                f"structure {s.name}: "
+                + ("WITH the DECLARED fundamental identity" if s.declares("fundamental-identity") else "no fundamental-identity declaration")
+            )
     else:
         eng = tangent_engine(registry=registry)
         report.append("base: tangent (Cartan) engine")
 
     def add(rule: Definition, why: str) -> None:
-        if _has(eng, type(rule)):
+        # deduplicated by the rule's structural KEY (identity or
+        # class + name), not by class alone (Faz 8 step 4a / 1d)
+        if any(getattr(r, "key", None) == rule.key for r in eng.definitions):
             return
         eng.register(rule)
         report.append(f"+ {rule.name}  [{why}]")
